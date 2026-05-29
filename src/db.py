@@ -154,6 +154,24 @@ async def update_user_lang(
             await s.commit()
 
 
+async def update_user_field(
+    telegram_id: int, field: str, value: str,
+):
+    allowed = {"full_name", "phone"}
+    if field not in allowed:
+        return
+    async with async_session() as s:
+        result = await s.execute(
+            select(User).where(
+                User.telegram_id == telegram_id
+            )
+        )
+        user = result.scalar_one_or_none()
+        if user:
+            setattr(user, field, value)
+            await s.commit()
+
+
 async def get_user_by_client_id(
     client_id: str,
 ) -> User | None:

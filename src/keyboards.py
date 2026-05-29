@@ -66,6 +66,27 @@ def back_kb(
     ])
 
 
+def profile_edit_kb(
+    lang: str = "ru",
+) -> InlineKeyboardMarkup:
+    if lang == "tj":
+        name_label = "✏️ Иваз кардани ном"
+        phone_label = "📱 Иваз кардани рақам"
+    else:
+        name_label = "✏️ Изменить ФИО"
+        phone_label = "📱 Изменить телефон"
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(
+            text=name_label,
+            callback_data="edit_profile_name",
+        )],
+        [InlineKeyboardButton(
+            text=phone_label,
+            callback_data="edit_profile_phone",
+        )],
+    ])
+
+
 # ── Админ ──
 
 def admin_main_kb() -> ReplyKeyboardMarkup:

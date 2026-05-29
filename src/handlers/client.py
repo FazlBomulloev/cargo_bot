@@ -15,6 +15,7 @@ from src.db import (
     get_user,
     get_warehouse,
     list_warehouses,
+    update_user_field,
     update_user_lang,
 )
 from src.fmt import (
@@ -28,6 +29,7 @@ from src.keyboards import (
     back_kb,
     client_main_kb,
     language_kb,
+    profile_edit_kb,
     subscription_kb,
     warehouses_inline_kb,
 )
@@ -54,6 +56,11 @@ class RegStates(StatesGroup):
 
 class ClientStates(StatesGroup):
     check_track = State()
+
+
+class EditProfileStates(StatesGroup):
+    edit_name = State()
+    edit_phone = State()
 
 
 # ── Helpers ──
@@ -282,8 +289,99 @@ async def on_profile(
     if user:
         await msg.answer(
             fmt_profile(user, lang),
+            reply_markup=profile_edit_kb(lang),
+        )
+
+
+@router.callback_query(F.data == "edit_profile_name")
+async def on_edit_name_start(
+    cb: CallbackQuery, state: FSMContext,
+):
+    await cb.answer()
+    lang = await _get_lang(state)
+    await state.set_state(EditProfileStates.edit_name)
+    await cb.message.answer(
+        get_text("edit_name_prompt", lang),
+        reply_markup=back_kb(lang),
+    )
+
+
+@router.message(EditProfileStates.edit_name)
+async def on_edit_name_input(
+    msg: Message, state: FSMContext,
+):
+    lang = await _get_lang(state)
+    text = msg.text.strip()
+    if text in _BTN_BACK:
+        await state.set_state(None)
+        await msg.answer(
+            get_text("menu", lang),
             reply_markup=client_main_kb(lang),
         )
+        return
+    if len(text) < 3:
+        await msg.answer(
+            get_text("name_too_short", lang),
+        )
+        return
+    await update_user_field(
+        msg.from_user.id, "full_name", text,
+    )
+    await state.set_state(None)
+    user = await get_user(msg.from_user.id)
+    await msg.answer(
+        get_text("profile_updated", lang),
+    )
+    await msg.answer(
+        fmt_profile(user, lang),
+        reply_markup=profile_edit_kb(lang),
+    )
+
+
+@router.callback_query(F.data == "edit_profile_phone")
+async def on_edit_phone_start(
+    cb: CallbackQuery, state: FSMContext,
+):
+    await cb.answer()
+    lang = await _get_lang(state)
+    await state.set_state(EditProfileStates.edit_phone)
+    await cb.message.answer(
+        get_text("edit_phone_prompt", lang),
+        reply_markup=back_kb(lang),
+    )
+
+
+@router.message(EditProfileStates.edit_phone)
+async def on_edit_phone_input(
+    msg: Message, state: FSMContext,
+):
+    lang = await _get_lang(state)
+    text = msg.text.strip()
+    if text in _BTN_BACK:
+        await state.set_state(None)
+        await msg.answer(
+            get_text("menu", lang),
+            reply_markup=client_main_kb(lang),
+        )
+        return
+    phone = validate_phone(text)
+    if not phone:
+        await msg.answer(
+            get_text("phone_invalid", lang),
+        )
+        return
+    await update_user_field(
+        msg.from_user.id, "phone", phone,
+    )
+    await state.set_state(None)
+    user = await get_user(msg.from_user.id)
+    await msg.answer(
+        get_text("profile_updated", lang),
+    )
+    await msg.answer(
+        fmt_profile(user, lang),
+        reply_markup=profile_edit_kb(lang),
+    )
 
 
 # ── Мои посылки ──
