@@ -289,3 +289,85 @@ def fmt_warehouse_list_admin(
             f"[{w.id}] {w.name} — {w.phone}"
         )
     return "\n".join(lines)
+
+
+def fmt_general_stats(s: dict) -> str:
+    total_d = s["dushanbe_total"]
+    recv = s["dushanbe_received"]
+    pct = (
+        round(recv / total_d * 100, 1)
+        if total_d else 0
+    )
+    return (
+        "┌─────────────────────────┐\n"
+        "│   📊  ОБЩАЯ СТАТИСТИКА   │\n"
+        "├─────────────────────────┤\n"
+        "│\n"
+        "│ 👥 Клиенты\n"
+        f"│   Всего: {s['total_users']}\n"
+        f"│   Сегодня: +{s['users_today']}\n"
+        f"│   За неделю: +{s['users_week']}\n"
+        f"│   За месяц: +{s['users_month']}\n"
+        "│\n"
+        "│ 📦 Посылки в Китае\n"
+        f"│   Всего: {s['china_total']}\n"
+        "│\n"
+        "│ 📦 Посылки в Душанбе\n"
+        f"│   Всего: {total_d}\n"
+        f"│   Ожидают: {s['dushanbe_waiting']}\n"
+        f"│   Получены: {recv}\n"
+        f"│   % получения: {pct}%\n"
+        "└─────────────────────────┘"
+    )
+
+
+def fmt_top_clients(clients: list) -> str:
+    if not clients:
+        return "📊 Пока нет данных по клиентам."
+    lines = [
+        "┌─────────────────────────┐",
+        "│  🏆  ТОП КЛИЕНТОВ       │",
+        "├─────────────────────────┤",
+    ]
+    for i, c in enumerate(clients, 1):
+        medal = {1: "🥇", 2: "🥈", 3: "🥉"}.get(
+            i, f"{i}.",
+        )
+        lines.append(
+            f"│ {medal} {c['client_id']}  "
+            f"{c['full_name']}"
+        )
+        lines.append(
+            f"│    📦 Посылок: {c['count']}"
+        )
+    lines.append("└─────────────────────────┘")
+    return "\n".join(lines)
+
+
+def fmt_stuck_parcels(items: list) -> str:
+    if not items:
+        return "✅ Зависших посылок нет!"
+    lines = [
+        "┌─────────────────────────┐",
+        "│  ⚠️  ЗАВИСШИЕ ПОСЫЛКИ   │",
+        f"│  (не забрали 14+ дней)  │",
+        "├─────────────────────────┤",
+    ]
+    for p in items:
+        lines.append(
+            f"│ 📦 {p['track_code']}"
+        )
+        lines.append(
+            f"│   🆔 {p['client_id']}  "
+            f"👤 {p['full_name']}"
+        )
+        lines.append(
+            f"│   📱 {p['phone']}  "
+            f"⏳ {p['waiting_days']} дн."
+        )
+        lines.append("│")
+    lines.append(
+        f"│ Итого: {len(items)} посылок"
+    )
+    lines.append("└─────────────────────────┘")
+    return "\n".join(lines)

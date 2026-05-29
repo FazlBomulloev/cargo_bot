@@ -16,8 +16,11 @@ from src.db import (
     delete_warehouse,
     find_in_china,
     find_in_dushanbe,
+    get_general_stats,
     get_parcels_by_client,
     get_setting,
+    get_stuck_parcels,
+    get_top_clients,
     get_user_by_client_id,
     get_warehouse,
     list_admins,
@@ -29,7 +32,10 @@ from src.db import (
 )
 from src.fmt import (
     fmt_client_info_admin,
+    fmt_general_stats,
     fmt_parcel_arrived,
+    fmt_stuck_parcels,
+    fmt_top_clients,
     fmt_track_result_admin,
     fmt_upload_result,
     fmt_warehouse_admin,
@@ -38,6 +44,7 @@ from src.keyboards import (
     admin_admins_kb,
     admin_back_kb,
     admin_main_kb,
+    admin_stats_kb,
     admin_wh_detail_kb,
     admin_wh_fields_kb,
     admin_warehouses_inline_kb,
@@ -92,6 +99,52 @@ async def on_back_admin(
     await msg.answer(
         "🔧 Панель администратора",
         reply_markup=admin_main_kb(),
+    )
+
+
+# ── Статистика ──
+
+@router.message(F.text == "📊 Статистика")
+async def on_stats_menu(
+    msg: Message, state: FSMContext,
+):
+    await state.set_state(None)
+    await msg.answer(
+        "📊 Аналитика и статистика",
+        reply_markup=admin_stats_kb(),
+    )
+
+
+@router.message(F.text == "📊 Общая статистика")
+async def on_general_stats(
+    msg: Message, state: FSMContext,
+):
+    stats = await get_general_stats()
+    await msg.answer(
+        fmt_general_stats(stats),
+        reply_markup=admin_stats_kb(),
+    )
+
+
+@router.message(F.text == "🏆 Топ клиентов")
+async def on_top_clients(
+    msg: Message, state: FSMContext,
+):
+    clients = await get_top_clients(10)
+    await msg.answer(
+        fmt_top_clients(clients),
+        reply_markup=admin_stats_kb(),
+    )
+
+
+@router.message(F.text == "⚠️ Зависшие посылки")
+async def on_stuck_parcels(
+    msg: Message, state: FSMContext,
+):
+    items = await get_stuck_parcels(14)
+    await msg.answer(
+        fmt_stuck_parcels(items),
+        reply_markup=admin_stats_kb(),
     )
 
 

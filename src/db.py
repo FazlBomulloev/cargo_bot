@@ -437,3 +437,143 @@ async def set_setting(key: str, value: str):
         else:
             s.add(Setting(key=key, value=value))
         await s.commit()
+
+
+# ── Statistics ──
+
+async def get_general_stats() -> dict:
+    now = datetime.utcnow()
+    today_start = now.replace(
+        hour=0, minute=0, second=0, microsecond=0,
+    )
+    week_ago = now - timedelta(days=7)
+    month_ago = now - timedelta(days=30)
+
+    async with async_session() as s:
+        total_users = (await s.execute(
+            select(sa_func.count(User.id))
+        )).scalar() or 0
+
+        users_today = (await s.execute(
+            select(sa_func.count(User.id)).where(
+                User.created_at >= today_start
+            )
+        )).scalar() or 0
+
+        users_week = (await s.execute(
+            select(sa_func.count(User.id)).where(
+                User.created_at >= week_ago
+            )
+        )).scalar() or 0
+
+        users_month = (await s.execute(
+            select(sa_func.count(User.id)).where(
+                User.created_at >= month_ago
+            )
+        )).scalar() or 0
+
+        china_total = (await s.execute(
+            select(sa_func.count(ParcelChina.id))
+        )).scalar() or 0
+
+        dushanbe_total = (await s.execute(
+            select(sa_func.count(ParcelDushanbe.id))
+        )).scalar() or 0
+
+        dushanbe_waiting = (await s.execute(
+            select(sa_func.count(ParcelDushanbe.id)).where(
+                ParcelDushanbe.status == "waiting"
+            )
+        )).scalar() or 0
+
+        dushanbe_received = (await s.execute(
+            select(sa_func.count(ParcelDushanbe.id)).where(
+                ParcelDushanbe.status == "received"
+            )
+        )).scalar() or 0
+
+    return {
+        "total_users": total_users,
+        "users_today": users_today,
+        "users_week": users_week,
+        "users_month": users_month,
+        "china_total": china_total,
+        "dushanbe_total": dushanbe_total,
+        "dushanbe_waiting": dushanbe_waiting,
+        "dushanbe_received": dushanbe_received,
+    }
+
+
+async def get_top_clients(
+    limit: int = 10,
+) -> list[dict]:
+    async with async_session() as s:
+        result = await s.execute(
+            select(
+                ParcelDushanbe.client_id,
+                sa_func.count(ParcelDushanbe.id).label(
+                    "cnt",
+                ),
+            )
+            .group_by(ParcelDushanbe.client_id)
+            .order_by(
+                sa_func.count(ParcelDushanbe.id).desc()
+            )
+            .limit(limit)
+        )
+        rows = result.all()
+
+    clients = []
+    for row in rows:
+        async with async_session() as s:
+            user = (await s.execute(
+                select(User).where(
+                    User.client_id == row.client_id
+                )
+            )).scalar_one_or_none()
+        clients.append({
+            "client_id": row.client_id,
+            "count": row.cnt,
+            "full_name": (
+                user.full_name if user else "—"
+            ),
+        })
+    return clients
+
+
+async def get_stuck_parcels(
+    days: int = 14,
+) -> list[dict]:
+    cutoff = datetime.utcnow() - timedelta(days=days)
+    async with async_session() as s:
+        result = await s.execute(
+            select(ParcelDushanbe)
+            .where(
+                ParcelDushanbe.status == "waiting",
+                ParcelDushanbe.arrived_at <= cutoff,
+            )
+            .order_by(ParcelDushanbe.arrived_at.asc())
+        )
+        parcels = result.scalars().all()
+
+    items = []
+    for p in parcels:
+        waiting_days = (
+            datetime.utcnow() - p.arrived_at
+        ).days
+        async with async_session() as s:
+            user = (await s.execute(
+                select(User).where(
+                    User.client_id == p.client_id
+                )
+            )).scalar_one_or_none()
+        items.append({
+            "track_code": p.track_code,
+            "client_id": p.client_id,
+            "full_name": (
+                user.full_name if user else "—"
+            ),
+            "phone": user.phone if user else "—",
+            "waiting_days": waiting_days,
+        })
+    return items
