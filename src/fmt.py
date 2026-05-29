@@ -1,7 +1,11 @@
-def fmt_profile(user) -> str:
+from src.texts import get_text
+
+
+def fmt_profile(user, lang: str = "ru") -> str:
+    title = get_text("profile_title", lang)
     return (
         "┌─────────────────────────┐\n"
-        "│        👤  ПРОФИЛЬ        │\n"
+        f"│        {title}        │\n"
         "├─────────────────────────┤\n"
         f"│ 🆔  {user.client_id}\n"
         f"│ 👤  {user.full_name}\n"
@@ -10,7 +14,23 @@ def fmt_profile(user) -> str:
     )
 
 
-def fmt_welcome(client_id: str) -> str:
+def fmt_welcome(client_id: str, lang: str = "ru") -> str:
+    if lang == "tj":
+        return (
+            "╔══════════════════════════╗\n"
+            "║   🎉  ХУШ ОМАДЕД!         ║\n"
+            "╠══════════════════════════╣\n"
+            "║                          ║\n"
+            "║  Сабти ном анҷом ёфт!    ║\n"
+            "║                          ║\n"
+            f"║  ID-и шумо:  {client_id}     \n"
+            "║                          ║\n"
+            "║  📌 Ин рамзро ҳангоми    ║\n"
+            "║  фиристодани посылкаҳо    ║\n"
+            "║  нишон диҳед              ║\n"
+            "║                          ║\n"
+            "╚══════════════════════════╝"
+        )
     return (
         "╔══════════════════════════╗\n"
         "║   🎉  ДОБРО ПОЖАЛОВАТЬ!   ║\n"
@@ -27,16 +47,49 @@ def fmt_welcome(client_id: str) -> str:
     )
 
 
-def fmt_parcel_arrived(track_code: str) -> str:
+def _status_text(
+    status: str, lang: str = "ru",
+) -> str:
+    if status == "received":
+        return get_text("status_received", lang)
+    return get_text("status_waiting", lang)
+
+
+def _format_date(dt) -> str:
+    if dt is None:
+        return "—"
+    return dt.strftime("%d.%m.%Y")
+
+
+def fmt_parcel_arrived(
+    track_code: str, lang: str = "ru",
+) -> str:
+    title = get_text("parcel_arrived_title", lang)
+    body = get_text("parcel_arrived_body", lang)
     return (
         "┌─────────────────────────┐\n"
-        "│   📬  ПОСЫЛКА ПРИБЫЛА!   │\n"
+        f"│   {title}   │\n"
         "├─────────────────────────┤\n"
         f"│ 📦  Трек: {track_code}\n"
         "│ 📍  Склад: Душанбе\n"
         "│\n"
-        "│ Ваша посылка доступна\n"
-        "│ для получения!\n"
+        f"│ {body}\n"
+        "└─────────────────────────┘"
+    )
+
+
+def fmt_parcel_reminder(
+    track_code: str, lang: str = "ru",
+) -> str:
+    title = get_text("parcel_reminder_title", lang)
+    body = get_text("parcel_reminder_body", lang)
+    return (
+        "┌─────────────────────────┐\n"
+        f"│   {title}   │\n"
+        "├─────────────────────────┤\n"
+        f"│ 📦  Трек: {track_code}\n"
+        "│\n"
+        f"│ {body}\n"
         "└─────────────────────────┘"
     )
 
@@ -54,16 +107,22 @@ def fmt_track_result_admin(
         f"│ 📦  Трек: {track_code}",
     ]
     if dushanbe_info and user_info:
+        status = _status_text(dushanbe_info.status)
+        date = _format_date(dushanbe_info.arrived_at)
         lines += [
-            "│ 📍  Статус: в Душанбе ✅",
+            f"│ 📍  Статус: {status}",
+            f"│ 📅  Дата: {date}",
             "│",
             f"│ 🆔  Клиент: {user_info.client_id}",
             f"│ 👤  {user_info.full_name}",
             f"│ 📱  {user_info.phone}",
         ]
     elif dushanbe_info:
+        status = _status_text(dushanbe_info.status)
+        date = _format_date(dushanbe_info.arrived_at)
         lines += [
-            "│ 📍  Статус: в Душанбе ✅",
+            f"│ 📍  Статус: {status}",
+            f"│ 📅  Дата: {date}",
             f"│ 🆔  Клиент: {dushanbe_info.client_id}",
             "│ ⚠️  Клиент не найден в базе",
         ]
@@ -77,7 +136,9 @@ def fmt_track_result_admin(
     return "\n".join(lines)
 
 
-def fmt_client_info_admin(user, parcels: dict) -> str:
+def fmt_client_info_admin(
+    user, parcels: list,
+) -> str:
     lines = [
         "┌─────────────────────────┐",
         "│   👤  КАРТОЧКА КЛИЕНТА   │",
@@ -87,11 +148,16 @@ def fmt_client_info_admin(user, parcels: dict) -> str:
         f"│ 📱  {user.phone}",
         f"│ 🔗  TG ID: {user.telegram_id}",
     ]
-    if parcels["dushanbe"]:
+    if parcels:
         lines.append("│")
-        lines.append("│ 📦 Посылки в Душанбе:")
-        for t in parcels["dushanbe"]:
-            lines.append(f"│   • {t}")
+        lines.append("│ 📦 Посылки:")
+        for p in parcels:
+            status = _status_text(p.status)
+            date = _format_date(p.arrived_at)
+            lines.append(
+                f"│   {p.track_code}  "
+                f"{date}  {status}"
+            )
     else:
         lines.append("│")
         lines.append("│ 📦 Посылок пока нет")
@@ -102,43 +168,75 @@ def fmt_client_info_admin(user, parcels: dict) -> str:
 def fmt_track_result_client(
     track_code: str,
     in_china: bool,
-    in_dushanbe: bool,
+    dushanbe_info,
+    lang: str = "ru",
 ) -> str:
+    title = get_text("track_title", lang)
     lines = [
         "┌─────────────────────────┐",
-        "│   🔎  РЕЗУЛЬТАТ ПОИСКА   │",
+        f"│   {title}   │",
         "├─────────────────────────┤",
         f"│ 📦  Трек: {track_code}",
     ]
-    if in_dushanbe:
-        lines.append("│ 📍  На складе в Душанбе ✅")
-        lines.append("│ 🎉  Можно забирать!")
+    if dushanbe_info:
+        if dushanbe_info.status == "received":
+            lines.append(
+                "│ "
+                + get_text(
+                    "track_in_dushanbe_received", lang
+                )
+            )
+        else:
+            lines.append(
+                "│ "
+                + get_text("track_in_dushanbe", lang)
+            )
+            lines.append(
+                "│ "
+                + get_text("track_can_pickup", lang)
+            )
     elif in_china:
-        lines.append("│ 📍  На складе в Китае 🇨🇳")
-        lines.append("│ ⏳  Ожидайте доставку")
+        lines.append(
+            "│ " + get_text("track_in_china", lang)
+        )
+        lines.append(
+            "│ "
+            + get_text("track_wait_delivery", lang)
+        )
     else:
-        lines.append("│ ❌  Трек-код не найден")
+        lines.append(
+            "│ " + get_text("track_not_found", lang)
+        )
     lines.append("└─────────────────────────┘")
     return "\n".join(lines)
 
 
 def fmt_my_parcels(
-    client_id: str, parcels: dict,
+    client_id: str,
+    parcels: list,
+    lang: str = "ru",
 ) -> str:
+    title = get_text("my_parcels_title", lang)
     lines = [
         "┌─────────────────────────┐",
-        "│     📦  МОИ ПОСЫЛКИ      │",
+        f"│     {title}      │",
         "├─────────────────────────┤",
         f"│ 🆔  {client_id}",
     ]
-    if parcels["dushanbe"]:
+    if parcels:
         lines.append("│")
-        lines.append("│ 🏬 В Душанбе:")
-        for t in parcels["dushanbe"]:
-            lines.append(f"│   ✅ {t}")
+        for p in parcels:
+            status = _status_text(p.status, lang)
+            date = _format_date(p.arrived_at)
+            lines.append(
+                f"│ {p.track_code}  "
+                f"{date}  {status}"
+            )
     else:
         lines.append("│")
-        lines.append("│ Посылок пока нет")
+        lines.append(
+            "│ " + get_text("no_parcels", lang)
+        )
     lines.append("└─────────────────────────┘")
     return "\n".join(lines)
 
@@ -180,7 +278,9 @@ def fmt_warehouse_admin(w) -> str:
     )
 
 
-def fmt_warehouse_list_admin(warehouses: list) -> str:
+def fmt_warehouse_list_admin(
+    warehouses: list,
+) -> str:
     if not warehouses:
         return "🏬 Складов пока нет."
     lines = ["🏬 Список складов:\n"]

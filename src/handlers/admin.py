@@ -85,14 +85,14 @@ async def on_cancel(msg: Message, state: FSMContext):
 
 
 @router.message(F.text == "⬅️ Назад в админку")
-async def on_back_admin(msg: Message, state: FSMContext):
+async def on_back_admin(
+    msg: Message, state: FSMContext,
+):
     await state.set_state(None)
     await msg.answer(
         "🔧 Панель администратора",
         reply_markup=admin_main_kb(),
     )
-
-
 
 
 # ── Админы ──
@@ -111,13 +111,18 @@ async def on_admins_menu(
 @router.message(F.text == "📋 Список админов")
 async def on_list_admins(msg: Message):
     admins = await list_admins()
-    text = f"📋 Список админов:\n\n👑 Суперадмин: {SUPER_ADMIN_ID}\n"
+    text = (
+        "📋 Список админов:\n\n"
+        f"👑 Суперадмин: {SUPER_ADMIN_ID}\n"
+    )
     if admins:
         for a in admins:
             text += f"👤 {a}\n"
     else:
         text += "\nДополнительных админов нет."
-    await msg.answer(text, reply_markup=admin_admins_kb())
+    await msg.answer(
+        text, reply_markup=admin_admins_kb(),
+    )
 
 
 @router.message(F.text == "➕ Добавить админа")
@@ -148,7 +153,9 @@ async def on_add_admin_input(
     else:
         text = f"⚠️ Админ {tid} уже существует."
     await state.set_state(None)
-    await msg.answer(text, reply_markup=admin_admins_kb())
+    await msg.answer(
+        text, reply_markup=admin_admins_kb(),
+    )
 
 
 @router.message(F.text == "➖ Удалить админа")
@@ -181,10 +188,12 @@ async def on_remove_admin_input(
     else:
         text = f"⚠️ Админ {tid} не найден."
     await state.set_state(None)
-    await msg.answer(text, reply_markup=admin_admins_kb())
+    await msg.answer(
+        text, reply_markup=admin_admins_kb(),
+    )
 
 
-# ── Загрузка Excel ──
+# ── Загрузка Excel: Китай ──
 
 @router.message(F.text == "📥 Загрузить Китай")
 async def on_upload_china_start(
@@ -205,9 +214,11 @@ async def on_upload_china_file(
     msg: Message, state: FSMContext, bot: Bot,
 ):
     doc = msg.document
-    if not doc.file_name.endswith((".xlsx", ".xls")):
+    if not doc.file_name.endswith(
+        (".xlsx", ".xls"),
+    ):
         await msg.answer(
-            "⚠️ Поддерживаются только .xlsx файлы."
+            "⚠️ Поддерживаются только .xlsx файлы.",
         )
         return
     file = await bot.get_file(doc.file_id)
@@ -219,7 +230,9 @@ async def on_upload_china_file(
         ws = wb.active
     except Exception as e:
         log.error("Ошибка чтения Excel: %s", e)
-        await msg.answer("⚠️ Не удалось прочитать файл.")
+        await msg.answer(
+            "⚠️ Не удалось прочитать файл.",
+        )
         return
     tracks = []
     for row in range(2, ws.max_row + 1):
@@ -236,6 +249,8 @@ async def on_upload_china_file(
     )
 
 
+# ── Загрузка Excel: Душанбе ──
+
 @router.message(F.text == "📥 Загрузить Душанбе")
 async def on_upload_dushanbe_start(
     msg: Message, state: FSMContext,
@@ -244,7 +259,8 @@ async def on_upload_dushanbe_start(
     await msg.answer(
         "📎 Отправьте Excel-файл.\n"
         "Столбец A: track_code\n"
-        "Столбец B: client_id",
+        "Столбец B: client_id\n"
+        "Столбец C: статус (+ или пусто)",
         reply_markup=cancel_kb(),
     )
 
@@ -256,9 +272,11 @@ async def on_upload_dushanbe_file(
     msg: Message, state: FSMContext, bot: Bot,
 ):
     doc = msg.document
-    if not doc.file_name.endswith((".xlsx", ".xls")):
+    if not doc.file_name.endswith(
+        (".xlsx", ".xls"),
+    ):
         await msg.answer(
-            "⚠️ Поддерживаются только .xlsx файлы."
+            "⚠️ Поддерживаются только .xlsx файлы.",
         )
         return
     file = await bot.get_file(doc.file_id)
@@ -270,16 +288,23 @@ async def on_upload_dushanbe_file(
         ws = wb.active
     except Exception as e:
         log.error("Ошибка чтения Excel: %s", e)
-        await msg.answer("⚠️ Не удалось прочитать файл.")
+        await msg.answer(
+            "⚠️ Не удалось прочитать файл.",
+        )
         return
     rows = []
     for row in range(2, ws.max_row + 1):
         track = ws.cell(row=row, column=1).value
         cid = ws.cell(row=row, column=2).value
+        status_mark = (
+            ws.cell(row=row, column=3).value or ""
+        )
         if track and cid:
-            rows.append(
-                (str(track).strip(), str(cid).strip())
-            )
+            rows.append((
+                str(track).strip(),
+                str(cid).strip(),
+                str(status_mark).strip(),
+            ))
     new_entries = await add_parcels_dushanbe(rows)
     await state.set_state(None)
     await msg.answer(
@@ -289,18 +314,22 @@ async def on_upload_dushanbe_file(
         ),
         reply_markup=admin_main_kb(),
     )
+    # Уведомления только для новых waiting
     sent = 0
     for entry in new_entries:
+        if entry["status"] == "received":
+            continue
         user = await get_user_by_client_id(
-            entry["client_id"]
+            entry["client_id"],
         )
         if not user:
             continue
+        lang = user.lang or "ru"
         try:
             await bot.send_message(
                 chat_id=user.telegram_id,
                 text=fmt_parcel_arrived(
-                    entry["track_code"]
+                    entry["track_code"], lang,
                 ),
             )
             await mark_notified(entry["track_code"])
@@ -342,7 +371,7 @@ async def on_check_track_input(
     user_info = None
     if dushanbe:
         user_info = await get_user_by_client_id(
-            dushanbe.client_id
+            dushanbe.client_id,
         )
     await state.set_state(None)
     await msg.answer(
@@ -369,7 +398,9 @@ async def on_check_client_start(
 async def on_check_client_input(
     msg: Message, state: FSMContext,
 ):
-    user = await get_user_by_client_id(msg.text.strip())
+    user = await get_user_by_client_id(
+        msg.text.strip(),
+    )
     if not user:
         await state.set_state(None)
         await msg.answer(
@@ -377,7 +408,9 @@ async def on_check_client_input(
             reply_markup=admin_back_kb(),
         )
         return
-    parcels = await get_parcels_by_client(user.client_id)
+    parcels = await get_parcels_by_client(
+        user.client_id,
+    )
     await state.set_state(None)
     await msg.answer(
         fmt_client_info_admin(user, parcels),
@@ -420,8 +453,10 @@ async def on_awh_list(
     )
 
 
-@router.callback_query(F.data.startswith("awh_")
-                        & ~F.data.startswith("awhf_"))
+@router.callback_query(
+    F.data.startswith("awh_")
+    & ~F.data.startswith("awhf_"),
+)
 async def on_awh_detail(
     cb: CallbackQuery, state: FSMContext,
 ):
@@ -429,7 +464,9 @@ async def on_awh_detail(
     data = cb.data
 
     if data == "awh_add":
-        await state.set_state(AdminStates.wh_add_name)
+        await state.set_state(
+            AdminStates.wh_add_name,
+        )
         await cb.message.answer(
             "Введите название склада:",
             reply_markup=cancel_kb(),
@@ -439,13 +476,15 @@ async def on_awh_detail(
     if data.startswith("awh_del_"):
         wid = int(data.split("_")[2])
         if await delete_warehouse(wid):
-            text = f"✅ Склад удалён."
+            text = "✅ Склад удалён."
         else:
             text = "❌ Склад не найден."
         whs = await list_warehouses()
         await cb.message.edit_text(
             text + "\n\n🏬 Управление складами",
-            reply_markup=admin_warehouses_inline_kb(whs),
+            reply_markup=admin_warehouses_inline_kb(
+                whs,
+            ),
         )
         return
 
@@ -453,7 +492,9 @@ async def on_awh_detail(
         wid = int(data.split("_")[2])
         w = await get_warehouse(wid)
         if not w:
-            await cb.message.answer("❌ Склад не найден.")
+            await cb.message.answer(
+                "❌ Склад не найден.",
+            )
             return
         await cb.message.edit_text(
             fmt_warehouse_admin(w)
@@ -462,11 +503,12 @@ async def on_awh_detail(
         )
         return
 
-    # awh_{id} — показать детали
     wid = int(data.split("_")[1])
     w = await get_warehouse(wid)
     if not w:
-        await cb.message.answer("❌ Склад не найден.")
+        await cb.message.answer(
+            "❌ Склад не найден.",
+        )
         return
     await cb.message.edit_text(
         fmt_warehouse_admin(w),
@@ -500,11 +542,14 @@ async def on_wh_edit_value(
     data = await state.get_data()
     wid = data["wh_edit_id"]
     field = data["wh_edit_field"]
-    await update_warehouse(wid, field, msg.text.strip())
+    await update_warehouse(
+        wid, field, msg.text.strip(),
+    )
     w = await get_warehouse(wid)
     await state.set_state(None)
     await msg.answer(
-        f"✅ Обновлено.\n\n" + fmt_warehouse_admin(w),
+        "✅ Обновлено.\n\n"
+        + fmt_warehouse_admin(w),
         reply_markup=admin_wh_fields_kb(wid),
     )
 
@@ -529,7 +574,8 @@ async def on_wh_add_phone(
     await state.set_state(AdminStates.wh_add_region)
     await msg.answer(
         "Введите область/регион\n"
-        "(напр. 新疆维吾尔自治区 乌鲁木齐市 天山区):",
+        "(напр. 新疆维吾尔自治区 "
+        "乌鲁木齐市 天山区):",
         reply_markup=cancel_kb(),
     )
 
@@ -538,7 +584,9 @@ async def on_wh_add_phone(
 async def on_wh_add_region(
     msg: Message, state: FSMContext,
 ):
-    await state.update_data(wh_region=msg.text.strip())
+    await state.update_data(
+        wh_region=msg.text.strip(),
+    )
     await state.set_state(AdminStates.wh_add_address)
     await msg.answer(
         "Введите адрес\n"
@@ -560,7 +608,7 @@ async def on_wh_add_address(
     whs = await list_warehouses()
     await state.set_state(None)
     await msg.answer(
-        f"✅ Склад добавлен!\n\n"
+        "✅ Склад добавлен!\n\n"
         + fmt_warehouse_admin(w),
         reply_markup=admin_warehouses_inline_kb(whs),
     )
@@ -572,7 +620,9 @@ async def on_wh_add_address(
 async def on_edit_tariffs_start(
     msg: Message, state: FSMContext,
 ):
-    current = await get_setting("tariffs") or "(пусто)"
+    current = (
+        await get_setting("tariffs") or "(пусто)"
+    )
     await state.set_state(AdminStates.edit_tariffs)
     await msg.answer(
         f"💰 Текущие тарифы:\n\n"
@@ -600,7 +650,9 @@ async def on_edit_tariffs_input(
 async def on_edit_support_start(
     msg: Message, state: FSMContext,
 ):
-    current = await get_setting("support") or "(пусто)"
+    current = (
+        await get_setting("support") or "(пусто)"
+    )
     await state.set_state(AdminStates.edit_support)
     await msg.answer(
         f"🆘 Текущий текст поддержки:\n\n"

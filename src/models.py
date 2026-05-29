@@ -37,6 +37,10 @@ class User(Base):
     phone: Mapped[str] = mapped_column(
         String(20), nullable=False,
     )
+    lang: Mapped[str] = mapped_column(
+        String(5), nullable=False, default="ru",
+        server_default="ru",
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.now(),
     )
@@ -76,8 +80,18 @@ class ParcelDushanbe(Base):
     client_id: Mapped[str] = mapped_column(
         String(20), nullable=False,
     )
+    status: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="waiting",
+        server_default="waiting",
+    )
     notified: Mapped[int] = mapped_column(
-        Integer, default=0,
+        Integer, default=0, server_default="0",
+    )
+    reminder_sent: Mapped[int] = mapped_column(
+        Integer, default=0, server_default="0",
+    )
+    arrived_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(),
     )
     uploaded_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.now(),

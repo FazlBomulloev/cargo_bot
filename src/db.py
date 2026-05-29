@@ -1,11 +1,10 @@
 import logging
-import random
 import re
+from datetime import datetime, timedelta
 
-from sqlalchemy import select, delete
+from sqlalchemy import select, delete, func as sa_func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import (
-    AsyncSession,
     async_sessionmaker,
     create_async_engine,
 )
@@ -28,36 +27,11 @@ async_session = async_sessionmaker(
     engine, expire_on_commit=False,
 )
 
-TARIFFS_DEFAULT = (
-    "💰 Тарифы доставки\n"
-    "\n"
-    "✈️ Авиа\n"
-    "━━━━━━━━━━━━━━━\n"
-    "📍 Урумчи\n"
-    "├ 🚚 Стандарт: 3–10 дней — 7.5–10 $\n"
-    "└ ⚡ VIP: 1–5 дней — 10–12 $\n"
-    "\n"
-    "📍 Иву\n"
-    "└ 🚚 Стандарт: 9–12 дней — 8.5–12 $\n"
-    "\n"
-    "🚛 Фура\n"
-    "━━━━━━━━━━━━━━━\n"
-    "📍 Гуанчжоу — 2.5 $/кг | 280 $/м³\n"
-    "📍 Урумчи — 2.5 $/кг | 280 $/м³\n"
-    "📍 Иву — 2.5 $/кг | 280 $/м³\n"
-    "\n"
-    "ℹ️ Сроки и цены могут меняться "
-    "в зависимости от условий доставки."
-)
-
-SUPPORT_DEFAULT = (
-    "🆘 Поддержка\n\n"
-    "По вопросам доставки и статуса посылки "
-    "свяжитесь с нашей службой поддержки.\n\n"
-    "📞 Телефоны компании:\n"
-    "+992 XX XXX XX XX\n"
-    "+992 XX XXX XX XX"
-)
+# Красивые номера — заглушка, не выдаются
+RESERVED_IDS = {
+    "007", "111", "222", "333", "444",
+    "555", "666", "777", "888", "999",
+}
 
 SEED_WAREHOUSES = [
     {
@@ -69,14 +43,22 @@ SEED_WAREHOUSES = [
     {
         "name": "Склад Урумчи (Авиа)",
         "phone": "13999210571",
-        "region": "新疆维吾尔自治区 乌鲁木齐市 天山区",
-        "address": "延安路662号边疆宾馆19TPS号库房",
+        "region": (
+            "新疆维吾尔自治区 乌鲁木齐市 天山区"
+        ),
+        "address": (
+            "延安路662号边疆宾馆19TPS号库房"
+        ),
     },
     {
         "name": "Склад Урумчи (Авто)",
         "phone": "13999210571",
-        "region": "新疆维吾尔自治区 乌鲁木齐市 天山区",
-        "address": "延安路662号边疆宾馆19TPS号库房",
+        "region": (
+            "新疆维吾尔自治区 乌鲁木齐市 天山区"
+        ),
+        "address": (
+            "延安路662号边疆宾馆19TPS号库房"
+        ),
     },
 ]
 
@@ -95,15 +77,7 @@ async def init_db():
 
 
 async def _seed_defaults():
-    defaults = {
-        "tariffs": TARIFFS_DEFAULT,
-        "support": SUPPORT_DEFAULT,
-    }
     async with async_session() as s:
-        for key, value in defaults.items():
-            existing = await s.get(Setting, key)
-            if not existing:
-                s.add(Setting(key=key, value=value))
         result = await s.execute(select(Warehouse))
         if not result.scalars().first():
             for w in SEED_WAREHOUSES:
@@ -111,20 +85,32 @@ async def _seed_defaults():
         await s.commit()
 
 
-# ── Users ──
+# ── Client ID ──
+
+def _format_client_id(num: int) -> str:
+    return f"TPS{num:03d}"
+
+
+def _is_reserved(num: int) -> bool:
+    suffix = f"{num:03d}"
+    return suffix in RESERVED_IDS
+
 
 async def generate_client_id() -> str:
     async with async_session() as s:
-        while True:
-            cid = f"TPS{random.randint(100000, 999999)}"
-            result = await s.execute(
-                select(User).where(
-                    User.client_id == cid
-                )
+        result = await s.execute(
+            select(
+                sa_func.max(User.id)
             )
-            if not result.scalar_one_or_none():
-                return cid
+        )
+        max_id = result.scalar() or 0
+        num = max_id + 1
+        while _is_reserved(num):
+            num += 1
+        return _format_client_id(num)
 
+
+# ── Users ──
 
 async def get_user(telegram_id: int) -> User | None:
     async with async_session() as s:
@@ -137,7 +123,8 @@ async def get_user(telegram_id: int) -> User | None:
 
 
 async def create_user(
-    telegram_id: int, full_name: str, phone: str,
+    telegram_id: int, full_name: str,
+    phone: str, lang: str = "ru",
 ) -> str:
     client_id = await generate_client_id()
     async with async_session() as s:
@@ -146,9 +133,25 @@ async def create_user(
             client_id=client_id,
             full_name=full_name,
             phone=phone,
+            lang=lang,
         ))
         await s.commit()
     return client_id
+
+
+async def update_user_lang(
+    telegram_id: int, lang: str,
+):
+    async with async_session() as s:
+        result = await s.execute(
+            select(User).where(
+                User.telegram_id == telegram_id
+            )
+        )
+        user = result.scalar_one_or_none()
+        if user:
+            user.lang = lang
+            await s.commit()
 
 
 async def get_user_by_client_id(
@@ -203,7 +206,8 @@ async def list_admins() -> list[int]:
     async with async_session() as s:
         result = await s.execute(select(Admin))
         return [
-            r.telegram_id for r in result.scalars().all()
+            r.telegram_id
+            for r in result.scalars().all()
         ]
 
 
@@ -243,23 +247,49 @@ async def find_in_china(track_code: str) -> bool:
 # ── Parcels Dushanbe ──
 
 async def add_parcels_dushanbe(
-    rows: list[tuple[str, str]],
+    rows: list[tuple[str, str, str]],
 ) -> list[dict]:
+    """rows: список (track_code, client_id, status_mark).
+    status_mark: '+' → received, иначе → waiting.
+    """
     new_entries = []
     async with async_session() as s:
-        for raw_track, raw_cid in rows:
+        for raw_track, raw_cid, raw_status in rows:
             code = normalize_track(raw_track)
             cid = raw_cid.strip().upper()
             if not code or not cid:
                 continue
+            status = (
+                "received"
+                if raw_status.strip() == "+"
+                else "waiting"
+            )
+            # Проверяем, есть ли уже этот трек
+            existing = await s.execute(
+                select(ParcelDushanbe).where(
+                    ParcelDushanbe.track_code == code
+                )
+            )
+            parcel = existing.scalar_one_or_none()
+            if parcel:
+                # Обновляем статус если пришёл +
+                if (
+                    status == "received"
+                    and parcel.status != "received"
+                ):
+                    parcel.status = "received"
+                continue
             try:
                 s.add(ParcelDushanbe(
-                    track_code=code, client_id=cid,
+                    track_code=code,
+                    client_id=cid,
+                    status=status,
                 ))
                 await s.flush()
                 new_entries.append({
                     "track_code": code,
                     "client_id": cid,
+                    "status": status,
                 })
             except IntegrityError:
                 await s.rollback()
@@ -283,18 +313,15 @@ async def find_in_dushanbe(
 
 async def get_parcels_by_client(
     client_id: str,
-) -> dict:
+) -> list[ParcelDushanbe]:
     cid = client_id.strip().upper()
     async with async_session() as s:
         result = await s.execute(
-            select(ParcelDushanbe).where(
-                ParcelDushanbe.client_id == cid
-            )
+            select(ParcelDushanbe)
+            .where(ParcelDushanbe.client_id == cid)
+            .order_by(ParcelDushanbe.arrived_at.desc())
         )
-        parcels = result.scalars().all()
-        return {
-            "dushanbe": [p.track_code for p in parcels],
-        }
+        return list(result.scalars().all())
 
 
 async def mark_notified(track_code: str):
@@ -308,6 +335,37 @@ async def mark_notified(track_code: str):
         parcel = result.scalar_one_or_none()
         if parcel:
             parcel.notified = 1
+            await s.commit()
+
+
+# ── Reminder ──
+
+async def get_parcels_for_reminder(
+) -> list[ParcelDushanbe]:
+    cutoff = datetime.utcnow() - timedelta(days=7)
+    async with async_session() as s:
+        result = await s.execute(
+            select(ParcelDushanbe).where(
+                ParcelDushanbe.status == "waiting",
+                ParcelDushanbe.notified == 1,
+                ParcelDushanbe.reminder_sent == 0,
+                ParcelDushanbe.arrived_at <= cutoff,
+            )
+        )
+        return list(result.scalars().all())
+
+
+async def mark_reminder_sent(track_code: str):
+    code = normalize_track(track_code)
+    async with async_session() as s:
+        result = await s.execute(
+            select(ParcelDushanbe).where(
+                ParcelDushanbe.track_code == code
+            )
+        )
+        parcel = result.scalar_one_or_none()
+        if parcel:
+            parcel.reminder_sent = 1
             await s.commit()
 
 

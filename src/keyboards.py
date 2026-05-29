@@ -1,12 +1,16 @@
 from aiogram.types import (
     InlineKeyboardButton,
     InlineKeyboardMarkup,
-    ReplyKeyboardMarkup,
     KeyboardButton,
+    ReplyKeyboardMarkup,
 )
 
+from src.texts import get_text
 
-def _kb(buttons: list[list[str]]) -> ReplyKeyboardMarkup:
+
+def _kb(
+    buttons: list[list[str]],
+) -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(
         keyboard=[
             [KeyboardButton(text=b) for b in row]
@@ -16,26 +20,64 @@ def _kb(buttons: list[list[str]]) -> ReplyKeyboardMarkup:
     )
 
 
-# ── Клиент ──
+# ── Выбор языка ──
 
-def client_main_kb() -> ReplyKeyboardMarkup:
-    return _kb([
-        ["📦 Мои посылки", "🔎 Проверить трек"],
-        ["🏬 Адреса складов", "💰 Прайс-лист"],
-        ["👤 Мой профиль", "🆘 Поддержка"],
+def language_kb() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(
+                text="🇷🇺 Русский",
+                callback_data="lang_ru",
+            ),
+            InlineKeyboardButton(
+                text="🇹🇯 Тоҷикӣ",
+                callback_data="lang_tj",
+            ),
+        ],
     ])
 
 
-def back_kb() -> ReplyKeyboardMarkup:
-    return _kb([["⬅️ Назад в меню"]])
+# ── Клиент ──
+
+def client_main_kb(
+    lang: str = "ru",
+) -> ReplyKeyboardMarkup:
+    return _kb([
+        [
+            get_text("btn_my_parcels", lang),
+            get_text("btn_check_track", lang),
+        ],
+        [
+            get_text("btn_warehouses", lang),
+            get_text("btn_price", lang),
+        ],
+        [
+            get_text("btn_profile", lang),
+            get_text("btn_support", lang),
+        ],
+    ])
+
+
+def back_kb(
+    lang: str = "ru",
+) -> ReplyKeyboardMarkup:
+    return _kb([
+        [get_text("btn_back", lang)],
+    ])
 
 
 # ── Админ ──
 
 def admin_main_kb() -> ReplyKeyboardMarkup:
     return _kb([
-        ["📥 Загрузить Китай", "📥 Загрузить Душанбе"],
-        ["🔎 Проверить трек", "🔎 Проверить клиента"],
+        [
+            "📥 Загрузить Китай",
+            "📥 Загрузить Душанбе",
+        ],
+        [
+            "🔎 Проверить трек",
+            "🔎 Проверить клиента",
+        ],
         ["👥 Админы"],
         ["🏬 Склады", "💰 Тарифы", "🆘 Поддержка"],
     ])
@@ -69,7 +111,9 @@ def warehouses_inline_kb(
         )]
         for w in warehouses
     ]
-    return InlineKeyboardMarkup(inline_keyboard=buttons)
+    return InlineKeyboardMarkup(
+        inline_keyboard=buttons,
+    )
 
 
 def admin_warehouses_inline_kb(
@@ -86,7 +130,9 @@ def admin_warehouses_inline_kb(
         text="➕ Добавить склад",
         callback_data="awh_add",
     )])
-    return InlineKeyboardMarkup(inline_keyboard=buttons)
+    return InlineKeyboardMarkup(
+        inline_keyboard=buttons,
+    )
 
 
 def admin_wh_detail_kb(
@@ -154,4 +200,6 @@ def subscription_kb(
         text="✅ Проверить подписку",
         callback_data="check_sub",
     )])
-    return InlineKeyboardMarkup(inline_keyboard=buttons)
+    return InlineKeyboardMarkup(
+        inline_keyboard=buttons,
+    )
