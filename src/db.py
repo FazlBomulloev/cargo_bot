@@ -223,12 +223,11 @@ async def add_parcels_china(
             if not code:
                 continue
             try:
-                s.add(ParcelChina(track_code=code))
-                await s.flush()
+                async with s.begin_nested():
+                    s.add(ParcelChina(track_code=code))
                 added += 1
             except IntegrityError:
-                await s.rollback()
-                s.begin()
+                continue
         await s.commit()
     return added
 
@@ -264,7 +263,6 @@ async def add_parcels_dushanbe(
                 if raw_status.strip() == "+"
                 else "waiting"
             )
-            # Проверяем, есть ли уже этот трек
             existing = await s.execute(
                 select(ParcelDushanbe).where(
                     ParcelDushanbe.track_code == code
@@ -272,7 +270,6 @@ async def add_parcels_dushanbe(
             )
             parcel = existing.scalar_one_or_none()
             if parcel:
-                # Обновляем статус если пришёл +
                 if (
                     status == "received"
                     and parcel.status != "received"
@@ -280,20 +277,19 @@ async def add_parcels_dushanbe(
                     parcel.status = "received"
                 continue
             try:
-                s.add(ParcelDushanbe(
-                    track_code=code,
-                    client_id=cid,
-                    status=status,
-                ))
-                await s.flush()
+                async with s.begin_nested():
+                    s.add(ParcelDushanbe(
+                        track_code=code,
+                        client_id=cid,
+                        status=status,
+                    ))
                 new_entries.append({
                     "track_code": code,
                     "client_id": cid,
                     "status": status,
                 })
             except IntegrityError:
-                await s.rollback()
-                s.begin()
+                continue
         await s.commit()
     return new_entries
 
