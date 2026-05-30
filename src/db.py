@@ -96,18 +96,32 @@ def _is_reserved(num: int) -> bool:
     return suffix in RESERVED_IDS
 
 
+def _client_id_num(client_id: str) -> int | None:
+    m = re.fullmatch(r"TPS(\d+)", (client_id or "").strip().upper())
+    return int(m.group(1)) if m else None
+
+
+async def _next_client_id(s) -> str:
+    """Минимальный свободный номер вида TPSNNN.
+
+    Опирается на реально занятые client_id, а не на User.id:
+    зарезервированные номера ломают соответствие id↔client_id,
+    из-за чего max(id)+1 мог совпасть с уже выданным client_id.
+    """
+    result = await s.execute(select(User.client_id))
+    used = {
+        n for (cid,) in result.all()
+        if (n := _client_id_num(cid)) is not None
+    }
+    num = 1
+    while num in used or _is_reserved(num):
+        num += 1
+    return _format_client_id(num)
+
+
 async def generate_client_id() -> str:
     async with async_session() as s:
-        result = await s.execute(
-            select(
-                sa_func.max(User.id)
-            )
-        )
-        max_id = result.scalar() or 0
-        num = max_id + 1
-        while _is_reserved(num):
-            num += 1
-        return _format_client_id(num)
+        return await _next_client_id(s)
 
 
 # ── Users ──
@@ -126,17 +140,44 @@ async def create_user(
     telegram_id: int, full_name: str,
     phone: str, lang: str = "ru",
 ) -> str:
-    client_id = await generate_client_id()
     async with async_session() as s:
-        s.add(User(
-            telegram_id=telegram_id,
-            client_id=client_id,
-            full_name=full_name,
-            phone=phone,
-            lang=lang,
-        ))
-        await s.commit()
-    return client_id
+        # Идемпотентность: повторный апдейт / двойное нажатие
+        # не должны создавать второго пользователя.
+        existing = (await s.execute(
+            select(User).where(
+                User.telegram_id == telegram_id
+            )
+        )).scalar_one_or_none()
+        if existing:
+            return existing.client_id
+
+        # Повторяем на случай гонки за один и тот же client_id.
+        for _ in range(50):
+            client_id = await _next_client_id(s)
+            s.add(User(
+                telegram_id=telegram_id,
+                client_id=client_id,
+                full_name=full_name,
+                phone=phone,
+                lang=lang,
+            ))
+            try:
+                await s.commit()
+                return client_id
+            except IntegrityError:
+                await s.rollback()
+                # Параллельно мог появиться тот же telegram_id.
+                existing = (await s.execute(
+                    select(User).where(
+                        User.telegram_id == telegram_id
+                    )
+                )).scalar_one_or_none()
+                if existing:
+                    return existing.client_id
+                # Иначе client_id перехвачен — пробуем следующий.
+        raise RuntimeError(
+            "Не удалось сгенерировать уникальный client_id"
+        )
 
 
 async def update_user_lang(
