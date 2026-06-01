@@ -194,7 +194,7 @@ async def on_add_admin_input(
     msg: Message, state: FSMContext,
 ):
     try:
-        tid = int(msg.text.strip())
+        tid = int((msg.text or "").strip())
     except ValueError:
         await msg.answer(
             "⚠️ Введите числовой Telegram ID:",
@@ -227,7 +227,7 @@ async def on_remove_admin_input(
     msg: Message, state: FSMContext,
 ):
     try:
-        tid = int(msg.text.strip())
+        tid = int((msg.text or "").strip())
     except ValueError:
         await msg.answer(
             "⚠️ Введите числовой Telegram ID:",
@@ -267,7 +267,7 @@ async def on_upload_china_file(
     msg: Message, state: FSMContext, bot: Bot,
 ):
     doc = msg.document
-    if not doc.file_name.endswith(
+    if not (doc.file_name or "").endswith(
         (".xlsx", ".xls"),
     ):
         await msg.answer(
@@ -281,6 +281,8 @@ async def on_upload_china_file(
     try:
         wb = load_workbook(buf, data_only=True)
         ws = wb.active
+        if ws is None:
+            raise ValueError("в файле нет активного листа")
     except Exception as e:
         log.error("Ошибка чтения Excel: %s", e)
         await msg.answer(
@@ -325,7 +327,7 @@ async def on_upload_dushanbe_file(
     msg: Message, state: FSMContext, bot: Bot,
 ):
     doc = msg.document
-    if not doc.file_name.endswith(
+    if not (doc.file_name or "").endswith(
         (".xlsx", ".xls"),
     ):
         await msg.answer(
@@ -339,6 +341,8 @@ async def on_upload_dushanbe_file(
     try:
         wb = load_workbook(buf, data_only=True)
         ws = wb.active
+        if ws is None:
+            raise ValueError("в файле нет активного листа")
     except Exception as e:
         log.error("Ошибка чтения Excel: %s", e)
         await msg.answer(
@@ -418,7 +422,7 @@ async def on_check_track_start(
 async def on_check_track_input(
     msg: Message, state: FSMContext,
 ):
-    text = msg.text.strip()
+    text = (msg.text or "").strip()
     in_china = await find_in_china(text)
     dushanbe = await find_in_dushanbe(text)
     user_info = None
@@ -452,7 +456,7 @@ async def on_check_client_input(
     msg: Message, state: FSMContext,
 ):
     user = await get_user_by_client_id(
-        msg.text.strip(),
+        (msg.text or "").strip(),
     )
     if not user:
         await state.set_state(None)
@@ -596,7 +600,7 @@ async def on_wh_edit_value(
     wid = data["wh_edit_id"]
     field = data["wh_edit_field"]
     await update_warehouse(
-        wid, field, msg.text.strip(),
+        wid, field, (msg.text or "").strip(),
     )
     w = await get_warehouse(wid)
     await state.set_state(None)
@@ -611,7 +615,7 @@ async def on_wh_edit_value(
 async def on_wh_add_name(
     msg: Message, state: FSMContext,
 ):
-    await state.update_data(wh_name=msg.text.strip())
+    await state.update_data(wh_name=(msg.text or "").strip())
     await state.set_state(AdminStates.wh_add_phone)
     await msg.answer(
         "Введите телефон склада:",
@@ -623,7 +627,7 @@ async def on_wh_add_name(
 async def on_wh_add_phone(
     msg: Message, state: FSMContext,
 ):
-    await state.update_data(wh_phone=msg.text.strip())
+    await state.update_data(wh_phone=(msg.text or "").strip())
     await state.set_state(AdminStates.wh_add_region)
     await msg.answer(
         "Введите область/регион\n"
@@ -638,7 +642,7 @@ async def on_wh_add_region(
     msg: Message, state: FSMContext,
 ):
     await state.update_data(
-        wh_region=msg.text.strip(),
+        wh_region=(msg.text or "").strip(),
     )
     await state.set_state(AdminStates.wh_add_address)
     await msg.answer(
@@ -655,7 +659,7 @@ async def on_wh_add_address(
     data = await state.get_data()
     wid = await add_warehouse(
         data["wh_name"], data["wh_phone"],
-        data["wh_region"], msg.text.strip(),
+        data["wh_region"], (msg.text or "").strip(),
     )
     w = await get_warehouse(wid)
     whs = await list_warehouses()
@@ -689,7 +693,7 @@ async def on_edit_tariffs_start(
 async def on_edit_tariffs_input(
     msg: Message, state: FSMContext,
 ):
-    await set_setting("tariffs", msg.text.strip())
+    await set_setting("tariffs", (msg.text or "").strip())
     await state.set_state(None)
     await msg.answer(
         "✅ Тарифы обновлены.",
@@ -719,7 +723,7 @@ async def on_edit_support_start(
 async def on_edit_support_input(
     msg: Message, state: FSMContext,
 ):
-    await set_setting("support", msg.text.strip())
+    await set_setting("support", (msg.text or "").strip())
     await state.set_state(None)
     await msg.answer(
         "✅ Поддержка обновлена.",

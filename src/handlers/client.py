@@ -223,7 +223,7 @@ async def on_reg_name(
     msg: Message, state: FSMContext,
 ):
     lang = await _get_lang(state)
-    text = msg.text.strip()
+    text = (msg.text or "").strip()
     if len(text) < 3:
         await msg.answer(
             get_text("name_too_short", lang),
@@ -241,16 +241,27 @@ async def on_reg_phone(
     msg: Message, state: FSMContext,
 ):
     lang = await _get_lang(state)
-    phone = validate_phone(msg.text.strip())
+    raw = (
+        msg.contact.phone_number
+        if msg.contact
+        else (msg.text or "")
+    )
+    phone = validate_phone(raw)
     if not phone:
         await msg.answer(
             get_text("phone_invalid", lang),
         )
         return
     data = await state.get_data()
+    name = data.get("reg_name")
+    if not name:
+        # Состояние потеряно (напр. рестарт) — заново
+        await state.set_state(RegStates.name)
+        await msg.answer(get_text("welcome", lang))
+        return
     client_id = await create_user(
         msg.from_user.id,
-        data["reg_name"],
+        name,
         phone,
         lang,
     )
@@ -311,7 +322,7 @@ async def on_edit_name_input(
     msg: Message, state: FSMContext,
 ):
     lang = await _get_lang(state)
-    text = msg.text.strip()
+    text = (msg.text or "").strip()
     if text in _BTN_BACK:
         await state.set_state(None)
         await msg.answer(
@@ -356,7 +367,7 @@ async def on_edit_phone_input(
     msg: Message, state: FSMContext,
 ):
     lang = await _get_lang(state)
-    text = msg.text.strip()
+    text = (msg.text or "").strip()
     if text in _BTN_BACK:
         await state.set_state(None)
         await msg.answer(
@@ -364,7 +375,12 @@ async def on_edit_phone_input(
             reply_markup=client_main_kb(lang),
         )
         return
-    phone = validate_phone(text)
+    raw = (
+        msg.contact.phone_number
+        if msg.contact
+        else text
+    )
+    phone = validate_phone(raw)
     if not phone:
         await msg.answer(
             get_text("phone_invalid", lang),
@@ -423,12 +439,18 @@ async def on_check_track_input(
     msg: Message, state: FSMContext,
 ):
     lang = await _get_lang(state)
-    text = msg.text.strip()
+    text = (msg.text or "").strip()
     if text in _BTN_BACK:
         await state.set_state(None)
         await msg.answer(
             get_text("menu", lang),
             reply_markup=client_main_kb(lang),
+        )
+        return
+    if not text:
+        await msg.answer(
+            get_text("enter_track", lang),
+            reply_markup=back_kb(lang),
         )
         return
     in_china = await find_in_china(text)
