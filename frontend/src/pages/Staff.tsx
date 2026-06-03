@@ -14,7 +14,7 @@ const ALL_PERMISSIONS = [
   { key: "issuance", label: "Выдача" },
   { key: "issuance_history", label: "История выдач" },
   { key: "clients", label: "Клиенты" },
-  { key: "unresolved", label: "Проблемные" },
+  { key: "unresolved", label: "Неопознанные" },
   { key: "warehouses", label: "Склады" },
   { key: "tariffs", label: "Тарифы" },
   { key: "settings", label: "Настройки" },

@@ -32,7 +32,7 @@ export default function Unresolved() {
     <>
       <div className="page-header">
         <Typography.Title className="page-title" level={3}>
-          Проблемные посылки
+          Неопознанные посылки
         </Typography.Title>
         {items.length > 0 && (
           <Tag

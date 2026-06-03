@@ -102,12 +102,10 @@ export default function ClientDetail() {
                   const colors: Record<string, string> = {
                     received_dushanbe: "processing",
                     issued: "success",
-                    problem: "error",
                   };
                   const labels: Record<string, string> = {
                     received_dushanbe: "В Душанбе",
                     issued: "Получена",
-                    problem: "Проблема",
                   };
                   return <Tag color={colors[v] || "default"} style={{ borderRadius: 20 }}>{labels[v] || v}</Tag>;
                 },

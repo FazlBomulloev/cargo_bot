@@ -7,14 +7,12 @@ const statusColors: Record<string, string> = {
   in_china: "cyan",
   received_dushanbe: "processing",
   issued: "success",
-  problem: "error",
   unresolved: "warning",
 };
 const statusLabels: Record<string, string> = {
   in_china: "В Китае",
   received_dushanbe: "В Душанбе",
   issued: "Получена",
-  problem: "Проблема",
   unresolved: "Неопознанные",
 };
 

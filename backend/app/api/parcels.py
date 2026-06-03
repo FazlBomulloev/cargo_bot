@@ -25,7 +25,7 @@ from app.api.deps import get_client_ip, require_role, verify_bot_secret
 
 router = APIRouter(prefix="/api/parcels", tags=["parcels"])
 
-VALID_STATUSES = {"received_dushanbe", "issued", "problem"}
+VALID_STATUSES = {"received_dushanbe", "issued"}
 
 
 # ── China ──

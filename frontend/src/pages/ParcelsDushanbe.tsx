@@ -30,7 +30,6 @@ export default function ParcelsDushanbe() {
   const statusMap: Record<string, { text: string; color: string }> = {
     received_dushanbe: { text: "Принято", color: "blue" },
     issued: { text: "Выдано", color: "default" },
-    problem: { text: "Проблема", color: "red" },
   };
 
   const onFinish = async (values: any) => {
@@ -39,7 +38,7 @@ export default function ParcelsDushanbe() {
     try {
       const { data } = await addDushanbeParcel(values);
       if (data.status === "unresolved") {
-        setResult({ type: "warning", message: "TPS-код не найден, посылка сохранена как проблемная" });
+        setResult({ type: "warning", message: "TPS-код не найден, посылка сохранена как неопознанная" });
       } else {
         setResult({ type: "success", message: `Посылка добавлена. Клиент: ${data.client_name}` });
       }

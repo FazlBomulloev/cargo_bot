@@ -10,7 +10,7 @@ const entityLabels: Record<string, { label: string; color: string }> = {
   warehouse: { label: "Склад", color: "cyan" },
   setting: { label: "Настройка", color: "gold" },
   issuance: { label: "Выдача", color: "lime" },
-  unresolved: { label: "Проблемная", color: "red" },
+  unresolved: { label: "Неопознанная", color: "red" },
 };
 
 const actionLabels: Record<string, string> = {
@@ -31,9 +31,9 @@ const actionLabels: Record<string, string> = {
   unblock_client: "Разблокировка клиента",
   create_issuance: "Оформление выдачи",
   issue_parcels: "Оформление выдачи",
-  resolve_parcel: "Привязка проблемной посылки",
-  resolve_unresolved: "Привязка проблемной посылки",
-  delete_unresolved: "Удаление проблемной посылки",
+  resolve_parcel: "Привязка неопознанной посылки",
+  resolve_unresolved: "Привязка неопознанной посылки",
+  delete_unresolved: "Удаление неопознанной посылки",
   create_warehouse: "Создание склада",
   update_warehouse: "Редактирование склада",
   delete_warehouse: "Удаление склада",

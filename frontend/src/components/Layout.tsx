@@ -40,7 +40,7 @@ const routeTitles: Record<string, string> = {
   "/issuance": "Выдача",
   "/issuance-history": "История выдач",
   "/clients": "Клиенты",
-  "/unresolved": "Проблемные",
+  "/unresolved": "Неопознанные",
   "/warehouses": "Склады",
   "/tariffs": "Тарифы",
   "/staff": "Сотрудники",
@@ -99,7 +99,7 @@ export default function Layout() {
     can("unresolved") && {
       key: "/unresolved",
       icon: <WarningOutlined />,
-      label: <Link to="/unresolved">Проблемные</Link>,
+      label: <Link to="/unresolved">Неопознанные</Link>,
     },
     can("warehouses") && {
       key: "/warehouses",

@@ -7,12 +7,10 @@ import { getParcel, updateParcelStatus } from "../api/parcels";
 const statusLabels: Record<string, string> = {
   received_dushanbe: "В Душанбе",
   issued: "Получена",
-  problem: "Проблема",
 };
 const statusColors: Record<string, string> = {
   received_dushanbe: "processing",
   issued: "success",
-  problem: "error",
 };
 
 export default function ParcelDetail() {
