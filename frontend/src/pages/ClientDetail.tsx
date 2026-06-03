@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { Card, Descriptions, Tag, Table, Button, message, Typography, Space } from "antd";
+import { Card, Descriptions, Tag, Table, Button, Typography, Space } from "antd";
 import { ArrowLeftOutlined } from "@ant-design/icons";
-import { getClient, blockClient } from "../api/clients";
+import { getClient } from "../api/clients";
 import { getParcels } from "../api/parcels";
 
 export default function ClientDetail() {
@@ -20,12 +20,6 @@ export default function ClientDetail() {
 
   useEffect(() => { if (id) load(); }, [id]);
 
-  const handleBlock = async () => {
-    await blockClient(+id!);
-    await load();
-    message.success("Статус изменён");
-  };
-
   if (!client) return null;
 
   return (
@@ -42,14 +36,6 @@ export default function ClientDetail() {
             Клиент {client.tps_code}
           </Typography.Title>
         </Space>
-        <Button
-          danger={client.status === "active"}
-          type={client.status === "active" ? "primary" : "default"}
-          onClick={handleBlock}
-          style={{ borderRadius: 10 }}
-        >
-          {client.status === "active" ? "Заблокировать" : "Разблокировать"}
-        </Button>
       </div>
 
       <div className="stagger-children">
@@ -62,17 +48,8 @@ export default function ClientDetail() {
             <Descriptions.Item label="TPS-код">
               <span style={{ fontWeight: 600, color: "#00A76F" }}>{client.tps_code}</span>
             </Descriptions.Item>
-            <Descriptions.Item label="Статус">
-              <Tag
-                color={client.status === "active" ? "success" : "error"}
-                style={{ borderRadius: 20, padding: "2px 12px" }}
-              >
-                {client.status === "active" ? "Активен" : "Заблокирован"}
-              </Tag>
-            </Descriptions.Item>
             <Descriptions.Item label="ФИО">{client.full_name}</Descriptions.Item>
             <Descriptions.Item label="Телефон">{client.phone}</Descriptions.Item>
-            <Descriptions.Item label="Адрес">{client.address || "—"}</Descriptions.Item>
             <Descriptions.Item label="Telegram ID">{client.telegram_id}</Descriptions.Item>
             <Descriptions.Item label="Язык">{client.lang}</Descriptions.Item>
             <Descriptions.Item label="Регистрация">{client.created_at?.slice(0, 10)}</Descriptions.Item>

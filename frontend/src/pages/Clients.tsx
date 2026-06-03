@@ -56,19 +56,6 @@ export default function Clients() {
               { title: "ФИО", dataIndex: "full_name" },
               { title: "Телефон", dataIndex: "phone", width: 160 },
               {
-                title: "Статус",
-                dataIndex: "status",
-                width: 120,
-                render: (v: string) => (
-                  <Tag
-                    color={v === "active" ? "success" : "error"}
-                    style={{ borderRadius: 20, padding: "2px 12px" }}
-                  >
-                    {v === "active" ? "Активен" : "Заблокирован"}
-                  </Tag>
-                ),
-              },
-              {
                 title: "Регистрация",
                 dataIndex: "created_at",
                 width: 120,
