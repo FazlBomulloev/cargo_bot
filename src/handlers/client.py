@@ -69,6 +69,22 @@ async def _get_lang(state: FSMContext) -> str:
     return data.get("lang", "ru")
 
 
+async def _ensure_state(state: FSMContext, telegram_id: int) -> str:
+    data = await state.get_data()
+    if data.get("registered"):
+        return data.get("lang", "ru")
+    client = await get_client(telegram_id)
+    if client:
+        lang = client.lang or "ru"
+        await state.update_data(
+            registered=True,
+            tps_code=client.tps_code,
+            lang=lang,
+        )
+        return lang
+    return data.get("lang", "ru")
+
+
 async def _check_sub(
     bot: Bot, user_id: int,
 ) -> bool:
@@ -276,7 +292,7 @@ async def on_reg_phone(
 
 @router.message(F.text.in_(_BTN_BACK))
 async def on_back(msg: Message, state: FSMContext):
-    lang = await _get_lang(state)
+    lang = await _ensure_state(state, msg.from_user.id)
     await state.set_state(None)
     await msg.answer(
         get_text("menu", lang),
@@ -290,7 +306,7 @@ async def on_back(msg: Message, state: FSMContext):
 async def on_profile(
     msg: Message, state: FSMContext, bot: Bot,
 ):
-    lang = await _get_lang(state)
+    lang = await _ensure_state(state, msg.from_user.id)
     if not await _ensure_sub(msg, bot, lang):
         return
     client = await get_client(msg.from_user.id)
@@ -403,7 +419,7 @@ async def on_edit_phone_input(
 async def on_my_parcels(
     msg: Message, state: FSMContext, bot: Bot,
 ):
-    lang = await _get_lang(state)
+    lang = await _ensure_state(state, msg.from_user.id)
     if not await _ensure_sub(msg, bot, lang):
         return
     data = await state.get_data()
@@ -421,7 +437,7 @@ async def on_my_parcels(
 async def on_check_track_start(
     msg: Message, state: FSMContext, bot: Bot,
 ):
-    lang = await _get_lang(state)
+    lang = await _ensure_state(state, msg.from_user.id)
     if not await _ensure_sub(msg, bot, lang):
         return
     await state.set_state(ClientStates.check_track)
@@ -467,7 +483,7 @@ async def on_check_track_input(
 async def on_warehouses(
     msg: Message, state: FSMContext, bot: Bot,
 ):
-    lang = await _get_lang(state)
+    lang = await _ensure_state(state, msg.from_user.id)
     if not await _ensure_sub(msg, bot, lang):
         return
     whs = await list_warehouses()
@@ -515,7 +531,7 @@ async def on_warehouse_select(
 async def on_tariffs(
     msg: Message, state: FSMContext, bot: Bot,
 ):
-    lang = await _get_lang(state)
+    lang = await _ensure_state(state, msg.from_user.id)
     if not await _ensure_sub(msg, bot, lang):
         return
     text = await get_setting("tariffs")
@@ -537,7 +553,7 @@ async def on_tariffs(
 async def on_support(
     msg: Message, state: FSMContext, bot: Bot,
 ):
-    lang = await _get_lang(state)
+    lang = await _ensure_state(state, msg.from_user.id)
     if not await _ensure_sub(msg, bot, lang):
         return
     text = await get_setting("support")

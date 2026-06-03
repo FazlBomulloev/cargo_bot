@@ -168,5 +168,5 @@ def fmt_warehouse_for_client(
         f"👤 {name}\n"
         f"📞 {w.phone}\n"
         f"🌏 {w.region}\n"
-        f"📍 {w.address} {tps_code}"
+        f"📍 {w.address}{tps_code}"
     )
