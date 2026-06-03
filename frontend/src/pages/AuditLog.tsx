@@ -30,7 +30,13 @@ const actionLabels: Record<string, string> = {
   block_client: "Блокировка клиента",
   unblock_client: "Разблокировка клиента",
   create_issuance: "Оформление выдачи",
-  resolve_parcel: "Решение проблемной посылки",
+  issue_parcels: "Оформление выдачи",
+  resolve_parcel: "Привязка проблемной посылки",
+  resolve_unresolved: "Привязка проблемной посылки",
+  delete_unresolved: "Удаление проблемной посылки",
+  create_warehouse: "Создание склада",
+  update_warehouse: "Редактирование склада",
+  delete_warehouse: "Удаление склада",
   update_setting: "Изменение настройки",
 };
 
