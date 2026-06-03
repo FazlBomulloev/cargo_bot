@@ -1,12 +1,15 @@
 """
 Seed script: generates 3 months of realistic demo data.
-Run:  python seed_demo.py   (from backend/ directory, with .env loaded)
+Uses existing staff/warehouses/tariffs from the database.
+Run inside api container:  python seed_demo.py
 """
 import asyncio
 import random
 import string
 from datetime import datetime, timedelta
 from decimal import Decimal
+
+from sqlalchemy import select, func
 
 from app.database import engine, async_session, Base
 from app.models.staff import StaffUser
@@ -18,8 +21,6 @@ from app.models.parcel_dushanbe import ParcelDushanbe
 from app.models.issuance import IssuanceOrder, IssuanceItem
 from app.models.unresolved import UnresolvedParcel
 from app.models.audit import AuditLog
-from app.models.setting import Setting
-from app.utils.security import hash_password
 
 random.seed(42)
 
@@ -77,68 +78,55 @@ async def main():
         await conn.run_sync(Base.metadata.create_all)
 
     async with async_session() as db:
-        # ── Staff ──
-        owner = StaffUser(
-            full_name="Owner", login="owner",
-            password_hash=hash_password("admin123"), role="owner",
-            created_at=START - timedelta(days=5),
-        )
-        china_admin = StaffUser(
-            full_name="Алишер Каримов", login="alisher",
-            password_hash=hash_password("china123"), role="admin_china",
-            created_at=START - timedelta(days=3),
-        )
-        dushanbe_admin = StaffUser(
-            full_name="Бахром Назаров", login="bakhrom",
-            password_hash=hash_password("dushanbe123"), role="admin_dushanbe",
-            created_at=START - timedelta(days=3),
-        )
-        db.add_all([owner, china_admin, dushanbe_admin])
-        await db.flush()
-        staff_ids = [owner.id, china_admin.id, dushanbe_admin.id]
-        print(f"Staff: {len(staff_ids)} users")
+        # ── Use existing staff ──
+        staff_result = await db.execute(select(StaffUser))
+        staff_list = staff_result.scalars().all()
+        if not staff_list:
+            print("ERROR: No staff users found. Start the API first to create the owner.")
+            return
+        staff_ids = [s.id for s in staff_list]
+        owner_id = next((s.id for s in staff_list if s.role == "owner"), staff_ids[0])
+        china_admin_id = next((s.id for s in staff_list if s.role == "admin_china"), owner_id)
+        dushanbe_admin_id = next((s.id for s in staff_list if s.role == "admin_dushanbe"), owner_id)
+        print(f"Staff: using {len(staff_ids)} existing users")
 
-        # ── Warehouses ──
-        wh_china1 = Warehouse(
-            name="Склад Иву", type="china", country="Китай", city="Иву",
-            phone="19878638724", region="浙江省 金华市 义乌市",
-            address="洪华小区26幢2单元",
-        )
-        wh_china2 = Warehouse(
-            name="Склад Урумчи (Авиа)", type="china", country="Китай", city="Урумчи",
-            phone="13999210571", region="新疆维吾尔自治区 乌鲁木齐市 天山区",
-            address="延安路662号边疆宾馆19TPS号库房",
-        )
-        wh_dushanbe = Warehouse(
-            name="Склад Душанбе", type="dushanbe", country="Таджикистан", city="Душанбе",
-            phone="+992900000000", region="Душанбе",
-            address="ул. Исмоили Сомони 42",
-        )
-        wh_pvz = Warehouse(
-            name="ПВЗ Центр", type="pvz", country="Таджикистан", city="Душанбе",
-            phone="+992917001122", region="Душанбе",
-            address="пр. Рудаки 105",
-        )
-        db.add_all([wh_china1, wh_china2, wh_dushanbe, wh_pvz])
-        await db.flush()
-        china_wh_ids = [wh_china1.id, wh_china2.id]
-        print("Warehouses: 4")
+        # ── Use existing warehouses ──
+        wh_result = await db.execute(select(Warehouse))
+        warehouses = wh_result.scalars().all()
+        if not warehouses:
+            print("ERROR: No warehouses found. Start the API first to seed warehouses.")
+            return
+        china_wh_ids = [w.id for w in warehouses if w.type == "china"]
+        dushanbe_wh_id = next((w.id for w in warehouses if w.type == "dushanbe"), warehouses[0].id)
+        if not china_wh_ids:
+            china_wh_ids = [warehouses[0].id]
+        print(f"Warehouses: using {len(warehouses)} existing")
 
-        # ── Tariffs ──
-        tariff_avia = Tariff(
-            method="avia", price_per_kg=Decimal("10.00"),
-            created_by=owner.id, is_active=True,
-            created_at=START - timedelta(days=2),
-        )
-        tariff_truck = Tariff(
-            method="truck", price_per_kg=Decimal("2.50"),
-            price_per_m3=Decimal("280.00"),
-            created_by=owner.id, is_active=True,
-            created_at=START - timedelta(days=2),
-        )
-        db.add_all([tariff_avia, tariff_truck])
-        await db.flush()
-        print("Tariffs: avia $10/kg, truck $2.5/kg")
+        # ── Use existing tariffs ──
+        tariff_result = await db.execute(select(Tariff).where(Tariff.is_active == True))
+        tariffs = tariff_result.scalars().all()
+        tariff_avia = next((t for t in tariffs if t.method == "avia"), None)
+        tariff_truck = next((t for t in tariffs if t.method == "truck"), None)
+        if not tariff_avia or not tariff_truck:
+            print("ERROR: Tariffs not found. Start the API first to seed tariffs.")
+            return
+        print(f"Tariffs: avia ${tariff_avia.price_per_kg}/kg, truck ${tariff_truck.price_per_kg}/kg")
+
+        # ── Check existing data ──
+        existing_clients = (await db.execute(select(func.count()).select_from(Client))).scalar() or 0
+        existing_china = (await db.execute(select(func.count()).select_from(ParcelChina))).scalar() or 0
+        existing_dushanbe = (await db.execute(select(func.count()).select_from(ParcelDushanbe))).scalar() or 0
+        if existing_clients > 10 or existing_china > 10 or existing_dushanbe > 10:
+            print(f"WARNING: Database already has data (clients={existing_clients}, china={existing_china}, dushanbe={existing_dushanbe})")
+            print("Skipping seed to avoid duplicates. Clear tables first if you want to re-seed.")
+            return
+
+        # ── Find next TPS code ──
+        tps_result = await db.execute(select(Client.tps_code))
+        used_tps = {row[0] for row in tps_result.all()}
+        next_tps_num = 1
+        while f"TPS{next_tps_num:03d}" in used_tps:
+            next_tps_num += 1
 
         # ── Clients (75) ──
         clients = []
@@ -157,9 +145,10 @@ async def main():
                 tg_id = random.randint(100_000_000, 999_999_999)
             used_tg_ids.add(tg_id)
             reg_date = rand_date(START - timedelta(days=10), NOW - timedelta(days=5))
+            tps_code = f"TPS{next_tps_num + i:03d}"
             c = Client(
                 telegram_id=tg_id,
-                tps_code=f"TPS{i + 1:03d}",
+                tps_code=tps_code,
                 full_name=full_name,
                 phone=rand_phone_tj(),
                 address=random.choice([None, "Душанбе", "Худжанд", "Куляб", "Бохтар"]),
@@ -175,7 +164,7 @@ async def main():
         await db.flush()
         print(f"Clients: {len(clients)}")
 
-        # ── China parcels (300 — some have no dushanbe counterpart) ──
+        # ── China parcels (300) ──
         china_parcels = []
         track_ids_china = set()
         for _ in range(300):
@@ -186,7 +175,7 @@ async def main():
             p = ParcelChina(
                 track_id=track,
                 warehouse_id=random.choice(china_wh_ids),
-                created_by=china_admin.id,
+                created_by=china_admin_id,
                 created_at=rand_date(START, NOW - timedelta(days=2)),
             )
             china_parcels.append(p)
@@ -219,12 +208,13 @@ async def main():
                 weight_kg=Decimal(str(weight)),
                 volume_m3=Decimal(str(volume)) if volume else None,
                 delivery_method=method,
-                warehouse_id=wh_dushanbe.id,
+                warehouse_id=dushanbe_wh_id,
                 amount_due=Decimal(str(amount)),
                 tariff_snapshot=tariff.price_per_kg,
                 has_china_registration=True,
                 comment=random.choice(COMMENTS),
-                created_by=dushanbe_admin.id,
+                notified_at=arrival,
+                created_by=dushanbe_admin_id,
                 created_at=arrival,
                 updated_at=arrival,
             )
@@ -262,7 +252,7 @@ async def main():
 
                 order = IssuanceOrder(
                     client_id=cid,
-                    staff_id=random.choice([owner.id, dushanbe_admin.id]),
+                    staff_id=random.choice([owner_id, dushanbe_admin_id]),
                     total_weight=Decimal(str(round(total_weight, 3))),
                     total_amount=Decimal(str(round(total_amount, 2))),
                     payment_status=pay_status,
@@ -292,16 +282,6 @@ async def main():
         await db.flush()
         print(f"Issuance orders: {issuance_count}")
 
-        # ── Some parcels ready_to_issue, some still received ──
-        not_issued = [p for p in dushanbe_parcels if p.status == "received_dushanbe"]
-        for p in random.sample(not_issued, min(15, len(not_issued))):
-            p.status = "ready_to_issue"
-            p.updated_at = NOW - timedelta(hours=random.randint(1, 72))
-        for p in random.sample(not_issued, min(3, len(not_issued))):
-            p.status = "problem"
-            p.comment = random.choice(["Повреждена упаковка", "Неверный вес", "Запрещённый товар"])
-            p.updated_at = NOW - timedelta(hours=random.randint(1, 48))
-
         # ── Unresolved parcels (8) ──
         unresolved = []
         for _ in range(8):
@@ -312,20 +292,20 @@ async def main():
                 weight_kg=Decimal(str(round(random.uniform(0.5, 10.0), 2))),
                 delivery_method=random.choice(["avia", "truck"]),
                 resolved=False,
-                created_by=dushanbe_admin.id,
+                created_by=dushanbe_admin_id,
                 created_at=rand_date(NOW - timedelta(days=14), NOW),
             )
             unresolved.append(u)
         db.add_all(unresolved)
         print(f"Unresolved: {len(unresolved)}")
 
-        # ── Audit logs (150+) ──
+        # ── Audit logs (180) ──
         actions = [
             ("create_parcel_china", "parcel"),
             ("create_parcel_dushanbe", "parcel"),
             ("issue_parcels", "issuance"),
             ("update_status", "parcel"),
-            ("create_client", "client"),
+            ("update_client", "client"),
             ("block_client", "client"),
             ("create_tariff", "tariff"),
             ("update_warehouse", "warehouse"),
@@ -347,10 +327,6 @@ async def main():
         db.add_all(audit_logs)
         print(f"Audit logs: {len(audit_logs)}")
 
-        # ── Settings ──
-        db.add(Setting(key="tariffs", value="Авиа: $10/кг\nФура: $2.5/кг, $280/м³"))
-        db.add(Setting(key="support", value="Поддержка: @tps_support\nТел: +992 90 000 00 00"))
-
         await db.commit()
         print("\n=== Seed complete! ===")
         print(f"  Clients:    {len(clients)}")
@@ -359,9 +335,6 @@ async def main():
         print(f"  Issued:     {len(to_issue)} parcels in {issuance_count} orders")
         print(f"  Unresolved: {len(unresolved)}")
         print(f"  Audit:      {len(audit_logs)}")
-        print(f"\n  Login: owner / admin123")
-        print(f"         alisher / china123")
-        print(f"         bakhrom / dushanbe123")
 
 
 if __name__ == "__main__":
