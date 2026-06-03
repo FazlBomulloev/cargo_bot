@@ -195,7 +195,8 @@ async def stuck_parcels(
     items = []
     for p in result:
         c = await db.get(Client, p.client_id)
-        waiting = (datetime.now(timezone.utc) - p.created_at).days
+        created = p.created_at if p.created_at.tzinfo else p.created_at.replace(tzinfo=timezone.utc)
+        waiting = (datetime.now(timezone.utc) - created).days
         items.append({
             "parcel_id": p.id, "track_id": p.track_id,
             "client_id": p.client_id,

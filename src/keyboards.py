@@ -87,47 +87,6 @@ def profile_edit_kb(
     ])
 
 
-# ── Админ ──
-
-def admin_main_kb() -> ReplyKeyboardMarkup:
-    return _kb([
-        [
-            "📥 Загрузить Китай",
-            "📥 Загрузить Душанбе",
-        ],
-        [
-            "🔎 Проверить трек",
-            "🔎 Проверить клиента",
-        ],
-        ["📊 Статистика", "👥 Админы"],
-        ["🏬 Склады", "💰 Тарифы", "🆘 Поддержка"],
-    ])
-
-
-def admin_stats_kb() -> ReplyKeyboardMarkup:
-    return _kb([
-        ["📊 Общая статистика"],
-        ["🏆 Топ клиентов", "⚠️ Зависшие посылки"],
-        ["⬅️ Назад в админку"],
-    ])
-
-
-def admin_admins_kb() -> ReplyKeyboardMarkup:
-    return _kb([
-        ["➕ Добавить админа", "➖ Удалить админа"],
-        ["📋 Список админов"],
-        ["⬅️ Назад в админку"],
-    ])
-
-
-def admin_back_kb() -> ReplyKeyboardMarkup:
-    return _kb([["⬅️ Назад в админку"]])
-
-
-def cancel_kb() -> ReplyKeyboardMarkup:
-    return _kb([["❌ Отмена"]])
-
-
 # ── Склады (inline) ──
 
 def warehouses_inline_kb(
@@ -143,75 +102,6 @@ def warehouses_inline_kb(
     return InlineKeyboardMarkup(
         inline_keyboard=buttons,
     )
-
-
-def admin_warehouses_inline_kb(
-    warehouses: list,
-) -> InlineKeyboardMarkup:
-    buttons = [
-        [InlineKeyboardButton(
-            text=f"🏬 {w.name}",
-            callback_data=f"awh_{w.id}",
-        )]
-        for w in warehouses
-    ]
-    buttons.append([InlineKeyboardButton(
-        text="➕ Добавить склад",
-        callback_data="awh_add",
-    )])
-    return InlineKeyboardMarkup(
-        inline_keyboard=buttons,
-    )
-
-
-def admin_wh_detail_kb(
-    wid: int,
-) -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(
-            text="✏️ Редактировать",
-            callback_data=f"awh_edit_{wid}",
-        )],
-        [InlineKeyboardButton(
-            text="🗑 Удалить",
-            callback_data=f"awh_del_{wid}",
-        )],
-        [InlineKeyboardButton(
-            text="⬅️ Назад к складам",
-            callback_data="awh_list",
-        )],
-    ])
-
-
-def admin_wh_fields_kb(
-    wid: int,
-) -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(inline_keyboard=[
-        [
-            InlineKeyboardButton(
-                text="Название",
-                callback_data=f"awhf_{wid}_name",
-            ),
-            InlineKeyboardButton(
-                text="Телефон",
-                callback_data=f"awhf_{wid}_phone",
-            ),
-        ],
-        [
-            InlineKeyboardButton(
-                text="Область",
-                callback_data=f"awhf_{wid}_region",
-            ),
-            InlineKeyboardButton(
-                text="Адрес",
-                callback_data=f"awhf_{wid}_address",
-            ),
-        ],
-        [InlineKeyboardButton(
-            text="⬅️ Назад",
-            callback_data=f"awh_{wid}",
-        )],
-    ])
 
 
 # ── Подписка ──

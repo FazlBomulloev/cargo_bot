@@ -7,16 +7,16 @@ from aiogram.types import CallbackQuery, Message
 
 from src.config import CHANNEL_URL, CHANNEL_USERNAME
 from src.db import (
-    create_user,
+    create_client,
     find_in_china,
     find_in_dushanbe,
+    get_client,
     get_parcels_by_client,
     get_setting,
-    get_user,
     get_warehouse,
     list_warehouses,
-    update_user_field,
-    update_user_lang,
+    update_client_field,
+    update_client_lang,
 )
 from src.fmt import (
     fmt_my_parcels,
@@ -39,7 +39,6 @@ from src.utils import validate_phone
 log = logging.getLogger(__name__)
 router = Router(name="client")
 
-# Сеты для фильтров — все варианты перевода
 _BTN_PARCELS = get_all_texts("btn_my_parcels")
 _BTN_TRACK = get_all_texts("btn_check_track")
 _BTN_WH = get_all_texts("btn_warehouses")
@@ -115,14 +114,13 @@ async def _ensure_sub(
 async def client_start_handler(
     msg: Message, state: FSMContext, bot: Bot,
 ):
-    """Точка входа для клиента из /start."""
     uid = msg.from_user.id
-    user = await get_user(uid)
-    if user:
-        lang = user.lang or "ru"
+    client = await get_client(uid)
+    if client:
+        lang = client.lang or "ru"
         await state.update_data(
             registered=True,
-            client_id=user.client_id,
+            tps_code=client.tps_code,
             lang=lang,
         )
         if not await _ensure_sub(msg, bot, lang):
@@ -131,7 +129,7 @@ async def client_start_handler(
         await msg.answer(
             get_text(
                 "welcome_back", lang,
-            ).format(name=user.full_name),
+            ).format(name=client.full_name),
             reply_markup=client_main_kb(lang),
         )
         return
@@ -150,18 +148,18 @@ async def on_lang_select(
     await state.update_data(lang=lang)
 
     uid = cb.from_user.id
-    user = await get_user(uid)
-    if user:
-        await update_user_lang(uid, lang)
+    client = await get_client(uid)
+    if client:
+        await update_client_lang(uid, lang)
         await state.update_data(
             registered=True,
-            client_id=user.client_id,
+            tps_code=client.tps_code,
         )
         await state.set_state(None)
         await cb.message.answer(
             get_text(
                 "welcome_back", lang,
-            ).format(name=user.full_name),
+            ).format(name=client.full_name),
             reply_markup=client_main_kb(lang),
         )
         return
@@ -187,17 +185,17 @@ async def on_check_sub(
         await cb.message.answer(
             get_text("subscription_ok", lang),
         )
-        user = await get_user(uid)
-        if user:
+        client = await get_client(uid)
+        if client:
             await state.update_data(
                 registered=True,
-                client_id=user.client_id,
+                tps_code=client.tps_code,
             )
             await state.set_state(None)
             await cb.message.answer(
                 get_text(
                     "welcome_back", lang,
-                ).format(name=user.full_name),
+                ).format(name=client.full_name),
                 reply_markup=client_main_kb(lang),
             )
         else:
@@ -255,22 +253,21 @@ async def on_reg_phone(
     data = await state.get_data()
     name = data.get("reg_name")
     if not name:
-        # Состояние потеряно (напр. рестарт) — заново
         await state.set_state(RegStates.name)
         await msg.answer(get_text("welcome", lang))
         return
-    client_id = await create_user(
+    tps_code = await create_client(
         msg.from_user.id,
         name,
         phone,
         lang,
     )
     await state.update_data(
-        registered=True, client_id=client_id,
+        registered=True, tps_code=tps_code,
     )
     await state.set_state(None)
     await msg.answer(
-        fmt_welcome(client_id, lang),
+        fmt_welcome(tps_code, lang),
         reply_markup=client_main_kb(lang),
     )
 
@@ -296,10 +293,10 @@ async def on_profile(
     lang = await _get_lang(state)
     if not await _ensure_sub(msg, bot, lang):
         return
-    user = await get_user(msg.from_user.id)
-    if user:
+    client = await get_client(msg.from_user.id)
+    if client:
         await msg.answer(
-            fmt_profile(user, lang),
+            fmt_profile(client, lang),
             reply_markup=profile_edit_kb(lang),
         )
 
@@ -335,16 +332,16 @@ async def on_edit_name_input(
             get_text("name_too_short", lang),
         )
         return
-    await update_user_field(
+    await update_client_field(
         msg.from_user.id, "full_name", text,
     )
     await state.set_state(None)
-    user = await get_user(msg.from_user.id)
+    client = await get_client(msg.from_user.id)
     await msg.answer(
         get_text("profile_updated", lang),
     )
     await msg.answer(
-        fmt_profile(user, lang),
+        fmt_profile(client, lang),
         reply_markup=profile_edit_kb(lang),
     )
 
@@ -386,16 +383,16 @@ async def on_edit_phone_input(
             get_text("phone_invalid", lang),
         )
         return
-    await update_user_field(
+    await update_client_field(
         msg.from_user.id, "phone", phone,
     )
     await state.set_state(None)
-    user = await get_user(msg.from_user.id)
+    client = await get_client(msg.from_user.id)
     await msg.answer(
         get_text("profile_updated", lang),
     )
     await msg.answer(
-        fmt_profile(user, lang),
+        fmt_profile(client, lang),
         reply_markup=profile_edit_kb(lang),
     )
 
@@ -410,10 +407,10 @@ async def on_my_parcels(
     if not await _ensure_sub(msg, bot, lang):
         return
     data = await state.get_data()
-    cid = data.get("client_id", "")
-    parcels = await get_parcels_by_client(cid)
+    tps_code = data.get("tps_code", "")
+    parcels = await get_parcels_by_client(tps_code)
     await msg.answer(
-        fmt_my_parcels(cid, parcels, lang),
+        fmt_my_parcels(tps_code, parcels, lang),
         reply_markup=client_main_kb(lang),
     )
 
@@ -501,12 +498,12 @@ async def on_warehouse_select(
         )
         return
     data = await state.get_data()
-    client_id = data.get("client_id", "ВАШ_ID")
-    user = await get_user(cb.from_user.id)
-    name = user.full_name if user else "Ваше Имя"
+    tps_code = data.get("tps_code", "ВАШ_ID")
+    client = await get_client(cb.from_user.id)
+    name = client.full_name if client else "Ваше Имя"
     await cb.message.answer(
         fmt_warehouse_for_client(
-            w, client_id, name,
+            w, tps_code, name,
         ),
         reply_markup=client_main_kb(lang),
     )

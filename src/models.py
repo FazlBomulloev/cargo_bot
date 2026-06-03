@@ -1,9 +1,12 @@
 from datetime import datetime
+from decimal import Decimal
 
 from sqlalchemy import (
     BigInteger,
+    Boolean,
     DateTime,
     Integer,
+    Numeric,
     String,
     Text,
     func,
@@ -19,8 +22,8 @@ class Base(DeclarativeBase):
     pass
 
 
-class User(Base):
-    __tablename__ = "users"
+class Client(Base):
+    __tablename__ = "clients"
 
     id: Mapped[int] = mapped_column(
         Integer, primary_key=True, autoincrement=True,
@@ -28,7 +31,7 @@ class User(Base):
     telegram_id: Mapped[int] = mapped_column(
         BigInteger, unique=True, nullable=False,
     )
-    client_id: Mapped[str] = mapped_column(
+    tps_code: Mapped[str] = mapped_column(
         String(20), unique=True, nullable=False,
     )
     full_name: Mapped[str] = mapped_column(
@@ -37,20 +40,21 @@ class User(Base):
     phone: Mapped[str] = mapped_column(
         String(20), nullable=False,
     )
+    address: Mapped[str | None] = mapped_column(
+        Text, nullable=True,
+    )
     lang: Mapped[str] = mapped_column(
-        String(5), nullable=False, default="ru",
-        server_default="ru",
+        String(5), default="ru", server_default="ru",
+    )
+    status: Mapped[str] = mapped_column(
+        String(20), default="active",
+        server_default="active",
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.now(),
     )
-
-
-class Admin(Base):
-    __tablename__ = "admins"
-
-    telegram_id: Mapped[int] = mapped_column(
-        BigInteger, primary_key=True,
+    last_activity_at: Mapped[datetime | None] = (
+        mapped_column(DateTime, nullable=True)
     )
 
 
@@ -60,10 +64,16 @@ class ParcelChina(Base):
     id: Mapped[int] = mapped_column(
         Integer, primary_key=True, autoincrement=True,
     )
-    track_code: Mapped[str] = mapped_column(
+    track_id: Mapped[str] = mapped_column(
         String(100), unique=True, nullable=False,
     )
-    uploaded_at: Mapped[datetime] = mapped_column(
+    warehouse_id: Mapped[int | None] = mapped_column(
+        Integer, nullable=True,
+    )
+    created_by: Mapped[int] = mapped_column(
+        Integer, nullable=False,
+    )
+    created_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.now(),
     )
 
@@ -74,26 +84,51 @@ class ParcelDushanbe(Base):
     id: Mapped[int] = mapped_column(
         Integer, primary_key=True, autoincrement=True,
     )
-    track_code: Mapped[str] = mapped_column(
+    track_id: Mapped[str] = mapped_column(
         String(100), unique=True, nullable=False,
     )
-    client_id: Mapped[str] = mapped_column(
-        String(20), nullable=False,
+    client_id: Mapped[int] = mapped_column(
+        Integer, nullable=False,
     )
     status: Mapped[str] = mapped_column(
-        String(20), nullable=False, default="waiting",
-        server_default="waiting",
+        String(30), nullable=False,
+        default="received_dushanbe",
+        server_default="received_dushanbe",
     )
-    notified: Mapped[int] = mapped_column(
-        Integer, default=0, server_default="0",
+    weight_kg: Mapped[Decimal] = mapped_column(
+        Numeric(10, 3), nullable=False,
     )
-    reminder_sent: Mapped[int] = mapped_column(
-        Integer, default=0, server_default="0",
+    volume_m3: Mapped[Decimal | None] = mapped_column(
+        Numeric(10, 4), nullable=True,
     )
-    arrived_at: Mapped[datetime] = mapped_column(
+    delivery_method: Mapped[str] = mapped_column(
+        String(20), nullable=False,
+    )
+    warehouse_id: Mapped[int | None] = mapped_column(
+        Integer, nullable=True,
+    )
+    amount_due: Mapped[Decimal | None] = mapped_column(
+        Numeric(10, 2), nullable=True,
+    )
+    tariff_snapshot: Mapped[Decimal | None] = (
+        mapped_column(Numeric(10, 2), nullable=True)
+    )
+    has_china_registration: Mapped[bool] = (
+        mapped_column(Boolean, default=False)
+    )
+    comment: Mapped[str | None] = mapped_column(
+        Text, nullable=True,
+    )
+    notified_at: Mapped[datetime | None] = mapped_column(
+        DateTime, nullable=True,
+    )
+    created_by: Mapped[int] = mapped_column(
+        Integer, nullable=False,
+    )
+    created_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.now(),
     )
-    uploaded_at: Mapped[datetime] = mapped_column(
+    updated_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.now(),
     )
 
@@ -107,6 +142,12 @@ class Setting(Base):
     value: Mapped[str] = mapped_column(
         Text, nullable=False,
     )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(),
+    )
+    updated_by: Mapped[int | None] = mapped_column(
+        Integer, nullable=True,
+    )
 
 
 class Warehouse(Base):
@@ -118,6 +159,15 @@ class Warehouse(Base):
     name: Mapped[str] = mapped_column(
         String(100), nullable=False,
     )
+    type: Mapped[str] = mapped_column(
+        String(20), nullable=False,
+    )
+    country: Mapped[str | None] = mapped_column(
+        String(50), nullable=True,
+    )
+    city: Mapped[str | None] = mapped_column(
+        String(100), nullable=True,
+    )
     phone: Mapped[str] = mapped_column(
         String(50), nullable=False,
     )
@@ -126,4 +176,10 @@ class Warehouse(Base):
     )
     address: Mapped[str] = mapped_column(
         Text, nullable=False,
+    )
+    is_active: Mapped[bool] = mapped_column(
+        Boolean, default=True,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(),
     )
