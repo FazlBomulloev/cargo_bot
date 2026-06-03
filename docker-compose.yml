@@ -23,14 +23,14 @@ services:
       - "8000"
     environment:
       DATABASE_URL: "postgresql+asyncpg://cargo:secret@postgres:5432/cargo_tps"
-      JWT_SECRET_KEY: "cargo-tps-jwt-secret-key-2026"
+      JWT_SECRET_KEY: "${JWT_SECRET_KEY}"
       BOT_TOKEN: "${BOT_TOKEN}"
       CHANNEL_USERNAME: "${CHANNEL_USERNAME}"
       CHANNEL_URL: "${CHANNEL_URL}"
-      API_BOT_SECRET: "cargo-tps-bot-secret-2026"
-      OWNER_LOGIN: "owner"
-      OWNER_PASSWORD: "admin123"
-      OWNER_FULL_NAME: "Owner"
+      API_BOT_SECRET: "${API_BOT_SECRET}"
+      OWNER_LOGIN: "${OWNER_LOGIN}"
+      OWNER_PASSWORD: "${OWNER_PASSWORD}"
+      OWNER_FULL_NAME: "${OWNER_FULL_NAME}"
     depends_on:
       postgres:
         condition: service_healthy
