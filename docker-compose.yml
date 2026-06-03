@@ -19,8 +19,8 @@ services:
 
   api:
     build: ./backend
-    ports:
-      - "8000:8000"
+    expose:
+      - "8000"
     environment:
       DATABASE_URL: "postgresql+asyncpg://cargo:secret@postgres:5432/cargo_tps"
       JWT_SECRET_KEY: "cargo-tps-jwt-secret-key-2026"
