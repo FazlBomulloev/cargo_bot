@@ -11,15 +11,50 @@ services:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cargo -d cargo_tps"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
 
   api:
     build: ./backend
     ports:
       - "8000:8000"
-    env_file:
-      - ./backend/.env
+    environment:
+      DATABASE_URL: "postgresql+asyncpg://cargo:secret@postgres:5432/cargo_tps"
+      JWT_SECRET_KEY: "cargo-tps-jwt-secret-key-2026"
+      BOT_TOKEN: "${BOT_TOKEN}"
+      CHANNEL_USERNAME: "${CHANNEL_USERNAME}"
+      CHANNEL_URL: "${CHANNEL_URL}"
+      API_BOT_SECRET: "cargo-tps-bot-secret-2026"
+      OWNER_LOGIN: "owner"
+      OWNER_PASSWORD: "admin123"
+      OWNER_FULL_NAME: "Owner"
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
+
+  bot:
+    build: .
+    environment:
+      DATABASE_URL: "postgresql+asyncpg://cargo:secret@postgres:5432/cargo_tps"
+      BOT_TOKEN: "${BOT_TOKEN}"
+      SUPER_ADMIN_ID: "${SUPER_ADMIN_ID}"
+      CHANNEL_USERNAME: "${CHANNEL_USERNAME}"
+      CHANNEL_URL: "${CHANNEL_URL}"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      api:
+        condition: service_started
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - api
 
 volumes:
   pgdata:

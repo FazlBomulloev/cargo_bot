@@ -28,12 +28,9 @@ class Settings(BaseSettings):
     def database_url_resolved(self) -> str:
         if self.DATABASE_URL:
             return self.DATABASE_URL
-        return (
-            f"postgresql+asyncpg://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}"
-            f"@{self.POSTGRES_HOST}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
-        )
+        return "sqlite+aiosqlite:///./data/cargo_tps.db"
 
-    model_config = {"env_file": ".env", "extra": "ignore"}
+    model_config = {"env_file": "../.env", "extra": "ignore"}
 
 
 settings = Settings()

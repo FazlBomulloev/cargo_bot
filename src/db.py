@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 
-from src.config import DB_PATH, DB_URL
+from src.config import DATABASE_URL
 from src.models import (
     Base,
     Client,
@@ -21,7 +21,7 @@ from src.models import (
 
 log = logging.getLogger(__name__)
 
-engine = create_async_engine(DB_URL, echo=False)
+engine = create_async_engine(DATABASE_URL, echo=False)
 async_session = async_sessionmaker(
     engine, expire_on_commit=False,
 )
@@ -37,8 +37,7 @@ def normalize_track(value: str) -> str:
 
 
 async def init_db():
-    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-    log.info("БД подключена: %s", DB_PATH)
+    log.info("БД подключена: %s", DATABASE_URL.split("@")[-1] if "@" in DATABASE_URL else DATABASE_URL)
 
 
 # ── TPS code generation ──
