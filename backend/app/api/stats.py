@@ -1,4 +1,5 @@
-from datetime import datetime, timedelta, timezone
+from collections import defaultdict
+from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import String, func, select
@@ -16,7 +17,7 @@ router = APIRouter(prefix="/api/stats", tags=["stats"])
 
 
 def _period_start(period: str) -> datetime | None:
-    now = datetime.now(timezone.utc)
+    now = datetime.utcnow()
     if period == "all":
         return None
     if period == "today":
@@ -36,11 +37,11 @@ async def overview(
     from_date: str | None = None,
     to_date: str | None = None,
     db: AsyncSession = Depends(get_db),
-    current_user: StaffUser = Depends(require_role("owner")),
+    current_user: StaffUser = Depends(require_role("owner", "admin_china", "admin_dushanbe")),
 ):
     if period == "custom" and from_date:
         start = datetime.fromisoformat(from_date)
-        end = datetime.fromisoformat(to_date) if to_date else datetime.now(timezone.utc)
+        end = datetime.fromisoformat(to_date) if to_date else datetime.utcnow()
     else:
         start = _period_start(period)
         end = None
@@ -71,7 +72,7 @@ async def overview(
         select(func.sum(ParcelDushanbe.weight_kg)).where(*_time_filter(ParcelDushanbe.created_at))
     )).scalar() or 0
 
-    revenue = (await db.execute(
+    revenue_val = (await db.execute(
         select(func.sum(IssuanceOrder.total_amount)).where(*_time_filter(IssuanceOrder.issued_at))
     )).scalar() or 0
 
@@ -84,7 +85,7 @@ async def overview(
         "dushanbe_count": dushanbe_count,
         "issued_count": issued_count,
         "total_weight": float(total_weight),
-        "revenue": float(revenue),
+        "revenue": float(revenue_val),
         "new_clients": new_clients,
     }
 
@@ -94,9 +95,9 @@ async def parcels_by_day(
     from_date: str | None = None,
     to_date: str | None = None,
     db: AsyncSession = Depends(get_db),
-    current_user: StaffUser = Depends(require_role("owner")),
+    current_user: StaffUser = Depends(require_role("owner", "admin_china", "admin_dushanbe")),
 ):
-    now = datetime.now(timezone.utc)
+    now = datetime.utcnow()
     start = datetime.fromisoformat(from_date) if from_date else now - timedelta(days=30)
     end = datetime.fromisoformat(to_date) if to_date else now
 
@@ -114,17 +115,20 @@ async def parcels_by_day(
         .group_by("day").order_by("day")
     )).all()
 
-    return {
-        "china": [{"date": d[0], "count": d[1]} for d in china],
-        "dushanbe": [{"date": d[0], "count": d[1]} for d in dushanbe],
-    }
+    combined = defaultdict(int)
+    for d in china:
+        combined[d[0]] += d[1]
+    for d in dushanbe:
+        combined[d[0]] += d[1]
+
+    return [{"date": k, "count": v} for k, v in sorted(combined.items())]
 
 
 @router.get("/revenue")
 async def revenue(
     group_by: str = Query("week"),
     db: AsyncSession = Depends(get_db),
-    current_user: StaffUser = Depends(require_role("owner")),
+    current_user: StaffUser = Depends(require_role("owner", "admin_china", "admin_dushanbe")),
 ):
     period_label = func.substr(func.cast(IssuanceOrder.issued_at, String), 1, 10)
     result = (await db.execute(
@@ -139,7 +143,7 @@ async def top_clients(
     limit: int = Query(10, ge=1, le=50),
     sort_by: str = Query("amount"),
     db: AsyncSession = Depends(get_db),
-    current_user: StaffUser = Depends(require_role("owner")),
+    current_user: StaffUser = Depends(require_role("owner", "admin_china", "admin_dushanbe")),
 ):
     if sort_by == "amount":
         order_col = func.sum(IssuanceOrder.total_amount).desc()
@@ -198,9 +202,9 @@ async def top_clients(
 async def stuck_parcels(
     days: int = Query(14),
     db: AsyncSession = Depends(get_db),
-    current_user: StaffUser = Depends(require_role("owner")),
+    current_user: StaffUser = Depends(require_role("owner", "admin_china", "admin_dushanbe")),
 ):
-    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+    cutoff = datetime.utcnow() - timedelta(days=days)
     result = (await db.execute(
         select(ParcelDushanbe)
         .where(
@@ -212,8 +216,7 @@ async def stuck_parcels(
     items = []
     for p in result:
         c = await db.get(Client, p.client_id)
-        created = p.created_at if p.created_at.tzinfo else p.created_at.replace(tzinfo=timezone.utc)
-        waiting = (datetime.now(timezone.utc) - created).days
+        waiting = (datetime.utcnow() - p.created_at).days
         items.append({
             "parcel_id": p.id, "track_id": p.track_id,
             "client_id": p.client_id,
@@ -229,19 +232,17 @@ async def stuck_parcels(
 async def staff_activity(
     period: str = Query("30d"),
     db: AsyncSession = Depends(get_db),
-    current_user: StaffUser = Depends(require_role("owner")),
+    current_user: StaffUser = Depends(require_role("owner", "admin_china", "admin_dushanbe")),
 ):
     from app.models.audit import AuditLog
     start = _period_start(period)
-    result = (await db.execute(
-        select(
-            AuditLog.staff_id,
-            func.count(AuditLog.id).label("action_count"),
-        )
-        .where(AuditLog.created_at >= start)
-        .group_by(AuditLog.staff_id)
-        .order_by(func.count(AuditLog.id).desc())
-    )).all()
+    query = select(
+        AuditLog.staff_id,
+        func.count(AuditLog.id).label("action_count"),
+    ).group_by(AuditLog.staff_id).order_by(func.count(AuditLog.id).desc())
+    if start:
+        query = query.where(AuditLog.created_at >= start)
+    result = (await db.execute(query)).all()
     items = []
     for r in result:
         staff = await db.get(StaffUser, r.staff_id)
