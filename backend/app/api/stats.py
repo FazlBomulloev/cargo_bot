@@ -16,19 +16,27 @@ from app.api.deps import require_role
 router = APIRouter(prefix="/api/stats", tags=["stats"])
 
 
-def _period_start(period: str) -> datetime | None:
+def _resolve_range(period: str, from_date: str | None, to_date: str | None):
     now = datetime.utcnow()
+    if period == "custom" and from_date:
+        start = datetime.fromisoformat(from_date)
+        end = datetime.fromisoformat(to_date) if to_date else now
+        return start, end
     if period == "all":
-        return None
+        return None, None
     if period == "today":
-        return now.replace(hour=0, minute=0, second=0, microsecond=0)
-    if period == "7d":
-        return now - timedelta(days=7)
-    if period == "30d":
-        return now - timedelta(days=30)
-    if period == "90d":
-        return now - timedelta(days=90)
-    return now - timedelta(days=30)
+        return now.replace(hour=0, minute=0, second=0, microsecond=0), None
+    days = {"7d": 7, "30d": 30, "90d": 90}.get(period, 30)
+    return now - timedelta(days=days), None
+
+
+def _time_filter(col, start, end):
+    clauses = []
+    if start is not None:
+        clauses.append(col >= start)
+    if end is not None:
+        clauses.append(col <= end)
+    return clauses
 
 
 @router.get("/overview")
@@ -39,45 +47,32 @@ async def overview(
     db: AsyncSession = Depends(get_db),
     current_user: StaffUser = Depends(require_role("owner", "admin_china", "admin_dushanbe")),
 ):
-    if period == "custom" and from_date:
-        start = datetime.fromisoformat(from_date)
-        end = datetime.fromisoformat(to_date) if to_date else datetime.utcnow()
-    else:
-        start = _period_start(period)
-        end = None
-
-    def _time_filter(col):
-        clauses = []
-        if start is not None:
-            clauses.append(col >= start)
-        if end is not None:
-            clauses.append(col <= end)
-        return clauses
+    start, end = _resolve_range(period, from_date, to_date)
 
     china_count = (await db.execute(
-        select(func.count(ParcelChina.id)).where(*_time_filter(ParcelChina.created_at))
+        select(func.count(ParcelChina.id)).where(*_time_filter(ParcelChina.created_at, start, end))
     )).scalar() or 0
 
     dushanbe_count = (await db.execute(
-        select(func.count(ParcelDushanbe.id)).where(*_time_filter(ParcelDushanbe.created_at))
+        select(func.count(ParcelDushanbe.id)).where(*_time_filter(ParcelDushanbe.created_at, start, end))
     )).scalar() or 0
 
     issued_count = (await db.execute(
         select(func.count(ParcelDushanbe.id)).where(
-            ParcelDushanbe.status == "issued", *_time_filter(ParcelDushanbe.updated_at)
+            ParcelDushanbe.status == "issued", *_time_filter(ParcelDushanbe.updated_at, start, end)
         )
     )).scalar() or 0
 
     total_weight = (await db.execute(
-        select(func.sum(ParcelDushanbe.weight_kg)).where(*_time_filter(ParcelDushanbe.created_at))
+        select(func.sum(ParcelDushanbe.weight_kg)).where(*_time_filter(ParcelDushanbe.created_at, start, end))
     )).scalar() or 0
 
     revenue_val = (await db.execute(
-        select(func.sum(IssuanceOrder.total_amount)).where(*_time_filter(IssuanceOrder.issued_at))
+        select(func.sum(IssuanceOrder.total_amount)).where(*_time_filter(IssuanceOrder.issued_at, start, end))
     )).scalar() or 0
 
     new_clients = (await db.execute(
-        select(func.count(Client.id)).where(*_time_filter(Client.created_at))
+        select(func.count(Client.id)).where(*_time_filter(Client.created_at, start, end))
     )).scalar() or 0
 
     return {
@@ -92,14 +87,18 @@ async def overview(
 
 @router.get("/parcels-by-day")
 async def parcels_by_day(
+    period: str = Query("30d"),
     from_date: str | None = None,
     to_date: str | None = None,
     db: AsyncSession = Depends(get_db),
     current_user: StaffUser = Depends(require_role("owner", "admin_china", "admin_dushanbe")),
 ):
+    start, end = _resolve_range(period, from_date, to_date)
     now = datetime.utcnow()
-    start = datetime.fromisoformat(from_date) if from_date else now - timedelta(days=30)
-    end = datetime.fromisoformat(to_date) if to_date else now
+    if start is None:
+        start = now - timedelta(days=90)
+    if end is None:
+        end = now
 
     day_label = func.substr(func.cast(ParcelChina.created_at, String), 1, 10)
     china = (await db.execute(
@@ -126,43 +125,50 @@ async def parcels_by_day(
 
 @router.get("/revenue")
 async def revenue(
-    group_by: str = Query("week"),
+    period: str = Query("30d"),
+    from_date: str | None = None,
+    to_date: str | None = None,
     db: AsyncSession = Depends(get_db),
     current_user: StaffUser = Depends(require_role("owner", "admin_china", "admin_dushanbe")),
 ):
+    start, end = _resolve_range(period, from_date, to_date)
+
     period_label = func.substr(func.cast(IssuanceOrder.issued_at, String), 1, 10)
-    result = (await db.execute(
-        select(period_label.label("period"), func.sum(IssuanceOrder.total_amount))
-        .group_by("period").order_by("period")
-    )).all()
+    query = select(period_label.label("period"), func.sum(IssuanceOrder.total_amount))
+    filters = _time_filter(IssuanceOrder.issued_at, start, end)
+    if filters:
+        query = query.where(*filters)
+    result = (await db.execute(query.group_by("period").order_by("period"))).all()
     return [{"period": r[0], "amount": float(r[1])} for r in result]
 
 
 @router.get("/top-clients")
 async def top_clients(
+    period: str = Query("30d"),
+    from_date: str | None = None,
+    to_date: str | None = None,
     limit: int = Query(10, ge=1, le=50),
     sort_by: str = Query("amount"),
     db: AsyncSession = Depends(get_db),
     current_user: StaffUser = Depends(require_role("owner", "admin_china", "admin_dushanbe")),
 ):
-    if sort_by == "amount":
-        order_col = func.sum(IssuanceOrder.total_amount).desc()
-    elif sort_by == "weight":
-        order_col = func.sum(IssuanceOrder.total_weight).desc()
-    else:
-        order_col = func.count(ParcelDushanbe.id).desc()
+    start, end = _resolve_range(period, from_date, to_date)
 
     if sort_by in ("amount", "weight"):
-        result = (await db.execute(
+        order_col = func.sum(IssuanceOrder.total_amount).desc() if sort_by == "amount" else func.sum(IssuanceOrder.total_weight).desc()
+        query = (
             select(
                 IssuanceOrder.client_id,
                 func.sum(IssuanceOrder.total_amount).label("total_amount"),
                 func.sum(IssuanceOrder.total_weight).label("total_weight"),
                 func.count(IssuanceOrder.id).label("order_count"),
             )
-            .group_by(IssuanceOrder.client_id)
-            .order_by(order_col)
-            .limit(limit)
+        )
+        filters = _time_filter(IssuanceOrder.issued_at, start, end)
+        if filters:
+            query = query.where(*filters)
+        result = (await db.execute(
+            query.group_by(IssuanceOrder.client_id).order_by(order_col).limit(limit)
         )).all()
         clients = []
         for r in result:
@@ -177,12 +183,17 @@ async def top_clients(
             })
         return clients
 
-    result = (await db.execute(
+    query = (
         select(
             ParcelDushanbe.client_id,
             func.count(ParcelDushanbe.id).label("parcel_count"),
         )
-        .group_by(ParcelDushanbe.client_id)
+    )
+    filters = _time_filter(ParcelDushanbe.created_at, start, end)
+    if filters:
+        query = query.where(*filters)
+    result = (await db.execute(
+        query.group_by(ParcelDushanbe.client_id)
         .order_by(func.count(ParcelDushanbe.id).desc())
         .limit(limit)
     )).all()
@@ -200,19 +211,27 @@ async def top_clients(
 
 @router.get("/stuck-parcels")
 async def stuck_parcels(
+    period: str = Query("30d"),
+    from_date: str | None = None,
+    to_date: str | None = None,
     days: int = Query(14),
     db: AsyncSession = Depends(get_db),
     current_user: StaffUser = Depends(require_role("owner", "admin_china", "admin_dushanbe")),
 ):
+    start, end = _resolve_range(period, from_date, to_date)
     cutoff = datetime.utcnow() - timedelta(days=days)
-    result = (await db.execute(
+
+    query = (
         select(ParcelDushanbe)
         .where(
             ParcelDushanbe.status == "received_dushanbe",
             ParcelDushanbe.created_at <= cutoff,
         )
-        .order_by(ParcelDushanbe.created_at.asc())
-    )).scalars().all()
+    )
+    filters = _time_filter(ParcelDushanbe.created_at, start, end)
+    if filters:
+        query = query.where(*filters)
+    result = (await db.execute(query.order_by(ParcelDushanbe.created_at.asc()))).scalars().all()
     items = []
     for p in result:
         c = await db.get(Client, p.client_id)
@@ -231,17 +250,20 @@ async def stuck_parcels(
 @router.get("/staff-activity")
 async def staff_activity(
     period: str = Query("30d"),
+    from_date: str | None = None,
+    to_date: str | None = None,
     db: AsyncSession = Depends(get_db),
     current_user: StaffUser = Depends(require_role("owner", "admin_china", "admin_dushanbe")),
 ):
     from app.models.audit import AuditLog
-    start = _period_start(period)
+    start, end = _resolve_range(period, from_date, to_date)
     query = select(
         AuditLog.staff_id,
         func.count(AuditLog.id).label("action_count"),
     ).group_by(AuditLog.staff_id).order_by(func.count(AuditLog.id).desc())
-    if start:
-        query = query.where(AuditLog.created_at >= start)
+    filters = _time_filter(AuditLog.created_at, start, end)
+    if filters:
+        query = query.where(*filters)
     result = (await db.execute(query)).all()
     items = []
     for r in result:

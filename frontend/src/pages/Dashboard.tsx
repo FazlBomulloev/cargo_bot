@@ -35,10 +35,10 @@ export default function Dashboard() {
     const fromDate = period === "custom" && customRange ? customRange[0].format("YYYY-MM-DD") : undefined;
     const toDate = period === "custom" && customRange ? customRange[1].format("YYYY-MM-DD") : undefined;
     getOverview(period, fromDate, toDate).then((r) => setOverview(r.data)).catch(() => {});
-    getTopClients(10, "amount").then((r) => setTopClients(r.data)).catch(() => {});
-    getStuckParcels(14).then((r) => setStuck(r.data)).catch(() => {});
-    getParcelsByDay().then((r) => setParcelsByDay(Array.isArray(r.data) ? r.data : [])).catch(() => {});
-    getRevenue("week").then((r) => setRevenue(Array.isArray(r.data) ? r.data : [])).catch(() => {});
+    getTopClients(period, fromDate, toDate).then((r) => setTopClients(r.data)).catch(() => {});
+    getStuckParcels(period, fromDate, toDate).then((r) => setStuck(r.data)).catch(() => {});
+    getParcelsByDay(period, fromDate, toDate).then((r) => setParcelsByDay(Array.isArray(r.data) ? r.data : [])).catch(() => {});
+    getRevenue(period, fromDate, toDate).then((r) => setRevenue(Array.isArray(r.data) ? r.data : [])).catch(() => {});
   }, [period, customRange]);
 
   const stats = [
