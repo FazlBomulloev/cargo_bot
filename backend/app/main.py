@@ -29,7 +29,7 @@ from app.api.notifications import router as notifications_router
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
 
-app = FastAPI(title="Cargo TPS API", version="1.0.0")
+app = FastAPI(title="Cargo TPS API", version="1.0.0", docs_url=None, redoc_url=None)
 
 app.add_middleware(
     CORSMiddleware,
