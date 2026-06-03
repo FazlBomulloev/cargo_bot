@@ -25,7 +25,7 @@ from app.api.deps import get_client_ip, require_role, verify_bot_secret
 
 router = APIRouter(prefix="/api/parcels", tags=["parcels"])
 
-VALID_STATUSES = {"received_dushanbe", "ready_to_issue", "issued", "problem"}
+VALID_STATUSES = {"received_dushanbe", "issued", "problem"}
 
 
 # ── China ──
@@ -89,6 +89,24 @@ async def add_china_bulk(
     }
 
 
+@router.get("/china", response_model=dict)
+async def list_china(
+    page: int = Query(1, ge=1),
+    per_page: int = Query(20, ge=1, le=100),
+    db: AsyncSession = Depends(get_db),
+    current_user: StaffUser = Depends(require_role("admin_china", "owner")),
+):
+    query = select(ParcelChina)
+    total = (await db.execute(select(func.count()).select_from(query.subquery()))).scalar() or 0
+    pages = max(1, math.ceil(total / per_page))
+    result = await db.execute(
+        query.order_by(ParcelChina.created_at.desc())
+        .offset((page - 1) * per_page).limit(per_page)
+    )
+    items = [ParcelChinaResponse.model_validate(p) for p in result.scalars().all()]
+    return {"items": items, "total": total, "page": page, "pages": pages, "per_page": per_page}
+
+
 # ── Dushanbe ──
 
 @router.post("/dushanbe", status_code=201)
@@ -148,6 +166,55 @@ async def add_dushanbe(
 
 
 # ── List / detail ──
+
+@router.get("/all")
+async def list_all_parcels(
+    page: int = Query(1, ge=1),
+    per_page: int = Query(20, ge=1, le=100),
+    status_filter: str | None = Query(None, alias="status"),
+    db: AsyncSession = Depends(get_db),
+    current_user: StaffUser = Depends(require_role("admin_china", "admin_dushanbe", "owner")),
+):
+    if status_filter == "in_china":
+        query = select(ParcelChina)
+        total = (await db.execute(select(func.count()).select_from(query.subquery()))).scalar() or 0
+        pages = max(1, math.ceil(total / per_page))
+        result = await db.execute(
+            query.order_by(ParcelChina.created_at.desc())
+            .offset((page - 1) * per_page).limit(per_page)
+        )
+        items = []
+        for p in result.scalars().all():
+            items.append({
+                "id": p.id, "track_id": p.track_id, "status": "in_china",
+                "weight_kg": None, "delivery_method": None,
+                "client_name": None, "tps_code": None,
+                "created_at": p.created_at.isoformat() if p.created_at else None,
+            })
+        return {"items": items, "total": total, "page": page, "pages": pages}
+
+    query = select(ParcelDushanbe)
+    if status_filter:
+        query = query.where(ParcelDushanbe.status == status_filter)
+    total = (await db.execute(select(func.count()).select_from(query.subquery()))).scalar() or 0
+    pages = max(1, math.ceil(total / per_page))
+    result = await db.execute(
+        query.order_by(ParcelDushanbe.created_at.desc())
+        .offset((page - 1) * per_page).limit(per_page)
+    )
+    items = []
+    for p in result.scalars().all():
+        c = await db.get(Client, p.client_id) if p.client_id else None
+        items.append({
+            "id": p.id, "track_id": p.track_id, "status": p.status,
+            "weight_kg": float(p.weight_kg) if p.weight_kg else None,
+            "delivery_method": p.delivery_method,
+            "client_name": c.full_name if c else None,
+            "tps_code": c.tps_code if c else None,
+            "created_at": p.created_at.isoformat() if p.created_at else None,
+        })
+    return {"items": items, "total": total, "page": page, "pages": pages}
+
 
 @router.get("", response_model=dict)
 async def list_parcels(

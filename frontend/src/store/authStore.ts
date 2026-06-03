@@ -5,6 +5,8 @@ export interface StaffUser {
   full_name: string;
   login: string;
   role: "owner" | "admin_china" | "admin_dushanbe";
+  avatar_url: string | null;
+  permissions: string[];
   warehouse_id: number | null;
   is_active: boolean;
 }

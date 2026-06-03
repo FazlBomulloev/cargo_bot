@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { Card, Input, Button, Table, Tag, Radio, message, Typography, Space, Statistic } from "antd";
-import { SearchOutlined, ShoppingCartOutlined } from "@ant-design/icons";
+import { Card, Input, Button, Table, Tag, Radio, message, Typography, Space, Statistic, List } from "antd";
+import { SearchOutlined, ShoppingCartOutlined, UserOutlined } from "@ant-design/icons";
 import { searchClients } from "../api/clients";
 import { getParcels } from "../api/parcels";
 import { getActiveTariffs } from "../api/tariffs";
@@ -9,6 +9,7 @@ import { createIssuance } from "../api/issuance";
 export default function Issuance() {
   const [query, setQuery] = useState("");
   const [client, setClient] = useState<any>(null);
+  const [candidates, setCandidates] = useState<any[]>([]);
   const [parcels, setParcels] = useState<any[]>([]);
   const [selected, setSelected] = useState<number[]>([]);
   const [tariffs, setTariffs] = useState<any[]>([]);
@@ -16,11 +17,9 @@ export default function Issuance() {
   const [paymentStatus, setPaymentStatus] = useState<string>("paid");
   const [loading, setLoading] = useState(false);
 
-  const search = async () => {
-    const { data } = await searchClients(query.trim());
-    if (data.length === 0) { message.warning("Клиент не найден"); return; }
-    const c = data[0];
+  const selectClient = async (c: any) => {
     setClient(c);
+    setCandidates([]);
     const [p, t] = await Promise.all([
       getParcels({ client_id: c.id, status: "received_dushanbe", per_page: 100 }),
       getActiveTariffs(),
@@ -28,6 +27,19 @@ export default function Issuance() {
     setParcels(p.data.items || []);
     setTariffs(t.data);
     setSelected([]);
+  };
+
+  const search = async () => {
+    const { data } = await searchClients(query.trim());
+    if (data.length === 0) { message.warning("Клиент не найден"); return; }
+    if (data.length === 1) {
+      await selectClient(data[0]);
+    } else {
+      setCandidates(data);
+      setClient(null);
+      setParcels([]);
+      setSelected([]);
+    }
   };
 
   const calcAmount = (p: any) => {
@@ -53,7 +65,7 @@ export default function Issuance() {
         payment_status: paymentStatus,
       });
       message.success(`Выдача оформлена! Итого: ${totalWeight.toFixed(1)} кг, $${totalAmount.toFixed(2)}`);
-      setClient(null); setParcels([]); setSelected([]); setQuery("");
+      setClient(null); setParcels([]); setSelected([]); setQuery(""); setCandidates([]);
     } catch (e: any) {
       message.error(e.response?.data?.detail || "Ошибка");
     } finally {
@@ -89,6 +101,51 @@ export default function Issuance() {
             </Button>
           </Space.Compact>
         </Card>
+
+        {candidates.length > 1 && !client && (
+          <Card
+            className="hover-card animate-scale-in"
+            title={
+              <span style={{ fontWeight: 600 }}>
+                Найдено клиентов: {candidates.length} — выберите нужного
+              </span>
+            }
+            style={{ marginBottom: 20 }}
+          >
+            <List
+              dataSource={candidates}
+              renderItem={(c: any) => (
+                <List.Item
+                  style={{ cursor: "pointer", padding: "12px 16px", borderRadius: 10, transition: "background 0.2s" }}
+                  onClick={() => selectClient(c)}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = "#F4F6F8")}
+                  onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                >
+                  <List.Item.Meta
+                    avatar={
+                      <div
+                        style={{
+                          width: 40, height: 40, borderRadius: 10,
+                          background: "linear-gradient(135deg, #00A76F, #5BE49B)",
+                          display: "flex", alignItems: "center", justifyContent: "center",
+                          color: "#fff", fontWeight: 700, fontSize: 16,
+                        }}
+                      >
+                        {c.full_name?.charAt(0)?.toUpperCase()}
+                      </div>
+                    }
+                    title={<span style={{ fontWeight: 600 }}>{c.full_name}</span>}
+                    description={
+                      <span style={{ color: "#637381" }}>
+                        {c.tps_code} &bull; {c.phone}
+                      </span>
+                    }
+                  />
+                </List.Item>
+              )}
+            />
+          </Card>
+        )}
 
         {client && (
           <Card

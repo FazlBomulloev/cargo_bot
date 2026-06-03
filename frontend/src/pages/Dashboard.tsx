@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Card, Col, Row, Select, Table, Typography } from "antd";
+import { Card, Col, DatePicker, Row, Select, Table, Typography } from "antd";
 import {
   SendOutlined,
   InboxOutlined,
@@ -7,6 +7,7 @@ import {
   UserAddOutlined,
   ArrowUpOutlined,
   ArrowDownOutlined,
+  DatabaseOutlined,
 } from "@ant-design/icons";
 import {
   getOverview,
@@ -16,9 +17,13 @@ import {
   getRevenue,
 } from "../api/stats";
 import { Line, Column } from "@ant-design/charts";
+import dayjs from "dayjs";
+
+const { RangePicker } = DatePicker;
 
 export default function Dashboard() {
   const [period, setPeriod] = useState("30d");
+  const [customRange, setCustomRange] = useState<[dayjs.Dayjs, dayjs.Dayjs] | null>(null);
   const [overview, setOverview] = useState<any>({});
   const [topClients, setTopClients] = useState<any[]>([]);
   const [stuck, setStuck] = useState<any[]>([]);
@@ -26,12 +31,15 @@ export default function Dashboard() {
   const [revenue, setRevenue] = useState<any[]>([]);
 
   useEffect(() => {
-    getOverview(period).then((r) => setOverview(r.data));
+    if (period === "custom" && !customRange) return;
+    const fromDate = period === "custom" && customRange ? customRange[0].format("YYYY-MM-DD") : undefined;
+    const toDate = period === "custom" && customRange ? customRange[1].format("YYYY-MM-DD") : undefined;
+    getOverview(period, fromDate, toDate).then((r) => setOverview(r.data));
     getTopClients(10, "amount").then((r) => setTopClients(r.data));
     getStuckParcels(14).then((r) => setStuck(r.data));
     getParcelsByDay().then((r) => setParcelsByDay(r.data)).catch(() => {});
     getRevenue("week").then((r) => setRevenue(r.data)).catch(() => {});
-  }, [period]);
+  }, [period, customRange]);
 
   const stats = [
     {
@@ -57,6 +65,17 @@ export default function Dashboard() {
       className: "stat-card stat-card-orange",
       color: "#E65100",
       bg: "linear-gradient(135deg, #FFF3E0 0%, #FFE0B2 100%)",
+    },
+    {
+      title: "Общий вес",
+      value: (() => {
+        const w = overview.total_weight ?? 0;
+        return w >= 1000 ? `${(w / 1000).toFixed(2)} т` : `${w.toFixed(1)} кг`;
+      })(),
+      icon: <DatabaseOutlined style={{ fontSize: 28 }} />,
+      className: "stat-card stat-card-teal",
+      color: "#006064",
+      bg: "linear-gradient(135deg, #E0F2F1 0%, #B2DFDB 100%)",
     },
     {
       title: "Новых клиентов",
@@ -124,17 +143,29 @@ export default function Dashboard() {
         <Typography.Title className="page-title" level={3}>
           Дашборд
         </Typography.Title>
-        <Select
-          value={period}
-          onChange={setPeriod}
-          style={{ width: 160 }}
-          options={[
-            { value: "today", label: "Сегодня" },
-            { value: "7d", label: "7 дней" },
-            { value: "30d", label: "30 дней" },
-            { value: "90d", label: "90 дней" },
-          ]}
-        />
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <Select
+            value={period}
+            onChange={(v) => { setPeriod(v); if (v !== "custom") setCustomRange(null); }}
+            style={{ width: 180 }}
+            options={[
+              { value: "today", label: "Сегодня" },
+              { value: "7d", label: "7 дней" },
+              { value: "30d", label: "30 дней" },
+              { value: "90d", label: "90 дней" },
+              { value: "all", label: "За всё время" },
+              { value: "custom", label: "Свой диапазон" },
+            ]}
+          />
+          {period === "custom" && (
+            <RangePicker
+              value={customRange}
+              onChange={(dates) => setCustomRange(dates as [dayjs.Dayjs, dayjs.Dayjs] | null)}
+              format="DD.MM.YYYY"
+              style={{ borderRadius: 8 }}
+            />
+          )}
+        </div>
       </div>
 
       <Row gutter={[20, 20]} className="stagger-children">

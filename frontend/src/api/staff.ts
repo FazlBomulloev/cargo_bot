@@ -12,3 +12,6 @@ export const deleteStaff = (id: number) => api.delete(`/staff/${id}`);
 
 export const resetPassword = (id: number, new_password: string) =>
   api.post(`/staff/${id}/reset-password`, { new_password });
+
+export const updatePermissions = (id: number, permissions: string[]) =>
+  api.patch(`/staff/${id}/permissions`, { permissions });

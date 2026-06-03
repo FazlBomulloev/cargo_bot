@@ -1,14 +1,14 @@
 import { useEffect, useState } from "react";
 import { Table, Button, Modal, Form, InputNumber, Select, Tag, message, Typography, Card } from "antd";
 import { PlusOutlined } from "@ant-design/icons";
-import { getTariffs, createTariff } from "../api/tariffs";
+import { getActiveTariffs, createTariff } from "../api/tariffs";
 
 export default function Tariffs() {
   const [items, setItems] = useState<any[]>([]);
   const [modal, setModal] = useState(false);
   const [form] = Form.useForm();
 
-  const load = () => getTariffs().then((r) => setItems(r.data));
+  const load = () => getActiveTariffs().then((r) => setItems(r.data));
   useEffect(() => { load(); }, []);
 
   const handleCreate = async () => {
@@ -65,18 +65,10 @@ export default function Tariffs() {
               },
               { title: "Валюта", dataIndex: "currency" },
               {
-                title: "Активен",
-                dataIndex: "is_active",
-                render: (v: boolean) => (
-                  <Tag
-                    color={v ? "success" : "default"}
-                    style={{ borderRadius: 20, padding: "2px 12px" }}
-                  >
-                    {v ? "Да" : "Нет"}
-                  </Tag>
-                ),
+                title: "Дата",
+                dataIndex: "created_at",
+                render: (v: string) => v ? new Date(v).toLocaleDateString("ru-RU") : "—",
               },
-              { title: "Дата", dataIndex: "created_at", render: (v: string) => v?.slice(0, 10) },
             ]}
           />
         </Card>

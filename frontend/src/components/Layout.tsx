@@ -4,11 +4,9 @@ import {
   Layout as AntLayout,
   Menu,
   Button,
-  Typography,
   Avatar,
   Dropdown,
   Breadcrumb,
-  Badge,
 } from "antd";
 import {
   DashboardOutlined,
@@ -28,8 +26,6 @@ import {
   MenuFoldOutlined,
   MenuUnfoldOutlined,
   UserOutlined,
-  BellOutlined,
-  SearchOutlined,
 } from "@ant-design/icons";
 import { useAuth } from "../hooks/useAuth";
 import { usePermissions } from "../hooks/usePermissions";
@@ -137,6 +133,7 @@ export default function Layout() {
       key: "profile",
       icon: <UserOutlined />,
       label: "Профиль",
+      onClick: () => navigate("/profile"),
     },
     {
       key: "settings",
@@ -297,18 +294,6 @@ export default function Layout() {
           </div>
 
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <Button
-              type="text"
-              icon={<SearchOutlined />}
-              style={{ width: 40, height: 40, borderRadius: 10 }}
-            />
-            <Badge count={0} offset={[-4, 4]}>
-              <Button
-                type="text"
-                icon={<BellOutlined />}
-                style={{ width: 40, height: 40, borderRadius: 10 }}
-              />
-            </Badge>
             <Dropdown
               menu={{ items: userMenuItems }}
               placement="bottomRight"

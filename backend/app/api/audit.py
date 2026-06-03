@@ -36,13 +36,17 @@ async def list_audit_logs(
         .offset((page - 1) * per_page).limit(per_page)
     )
     logs = result.scalars().all()
-    items = [
-        {
-            "id": log.id, "staff_id": log.staff_id, "action": log.action,
+    staff_cache: dict[int, str] = {}
+    items = []
+    for log in logs:
+        if log.staff_id not in staff_cache:
+            s = await db.get(StaffUser, log.staff_id)
+            staff_cache[log.staff_id] = s.full_name if s else "?"
+        items.append({
+            "id": log.id, "staff_id": log.staff_id,
+            "staff_name": staff_cache[log.staff_id],
+            "action": log.action,
             "entity_type": log.entity_type, "entity_id": log.entity_id,
-            "before_json": log.before_json, "after_json": log.after_json,
-            "ip_address": log.ip_address, "created_at": log.created_at.isoformat(),
-        }
-        for log in logs
-    ]
+            "created_at": log.created_at.isoformat(),
+        })
     return {"items": items, "total": total, "page": page, "pages": pages, "per_page": per_page}

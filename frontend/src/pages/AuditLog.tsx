@@ -13,6 +13,27 @@ const entityLabels: Record<string, { label: string; color: string }> = {
   unresolved: { label: "Проблемная", color: "red" },
 };
 
+const actionLabels: Record<string, string> = {
+  create_parcel_china: "Добавление посылки (Китай)",
+  bulk_create_parcel_china: "Массовое добавление (Китай)",
+  create_parcel_dushanbe: "Добавление посылки (Душанбе)",
+  update_status: "Изменение статуса",
+  update_parcel: "Редактирование посылки",
+  create_staff: "Создание сотрудника",
+  update_staff: "Редактирование сотрудника",
+  deactivate_staff: "Деактивация сотрудника",
+  reset_password: "Сброс пароля",
+  update_permissions: "Изменение прав доступа",
+  create_tariff: "Создание тарифа",
+  update_tariff: "Редактирование тарифа",
+  update_client: "Редактирование клиента",
+  block_client: "Блокировка клиента",
+  unblock_client: "Разблокировка клиента",
+  create_issuance: "Оформление выдачи",
+  resolve_parcel: "Решение проблемной посылки",
+  update_setting: "Изменение настройки",
+};
+
 export default function AuditLog() {
   const [data, setData] = useState<any>({ items: [], total: 0 });
   const [page, setPage] = useState(1);
@@ -32,7 +53,7 @@ export default function AuditLog() {
         </Typography.Title>
         <Select
           allowClear
-          placeholder="Тип объекта"
+          placeholder="Раздел"
           style={{ width: 180 }}
           value={entityType}
           onChange={(v) => { setEntityType(v); setPage(1); }}
@@ -55,17 +76,25 @@ export default function AuditLog() {
               showTotal: (total) => `Всего: ${total}`,
             }}
             columns={[
-              { title: "ID", dataIndex: "id", width: 60 },
-              { title: "Сотрудник", dataIndex: "staff_id", width: 100 },
               {
-                title: "Действие",
-                dataIndex: "action",
+                title: "Сотрудник",
+                dataIndex: "staff_name",
+                width: 160,
                 render: (v: string) => <span style={{ fontWeight: 500 }}>{v}</span>,
               },
               {
-                title: "Тип",
+                title: "Действие",
+                dataIndex: "action",
+                render: (v: string) => (
+                  <span style={{ fontWeight: 500 }}>
+                    {actionLabels[v] || v}
+                  </span>
+                ),
+              },
+              {
+                title: "Раздел",
                 dataIndex: "entity_type",
-                width: 120,
+                width: 130,
                 render: (v: string) => {
                   const e = entityLabels[v];
                   return e ? (
@@ -75,16 +104,16 @@ export default function AuditLog() {
                   ) : v;
                 },
               },
-              { title: "Объект", dataIndex: "entity_id", width: 80 },
               {
-                title: "IP",
-                dataIndex: "ip_address",
-                width: 130,
-                render: (v: string) => (
-                  <span style={{ fontFamily: "monospace", fontSize: 13, color: "#637381" }}>{v}</span>
-                ),
+                title: "Дата",
+                dataIndex: "created_at",
+                width: 170,
+                render: (v: string) =>
+                  v ? new Date(v).toLocaleString("ru-RU", {
+                    day: "2-digit", month: "2-digit", year: "numeric",
+                    hour: "2-digit", minute: "2-digit",
+                  }) : "—",
               },
-              { title: "Дата", dataIndex: "created_at", width: 170 },
             ]}
           />
         </Card>

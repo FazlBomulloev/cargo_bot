@@ -1,7 +1,7 @@
-import { useRef, useState } from "react";
-import { Card, Input, Button, message, Typography, Divider, Space, Tag } from "antd";
+import { useEffect, useRef, useState } from "react";
+import { Card, Input, Button, message, Typography, Divider, Space, Tag, Table } from "antd";
 import { ScanOutlined, CloudUploadOutlined, CheckCircleOutlined } from "@ant-design/icons";
-import { addChinaParcel, addChinaBulk } from "../api/parcels";
+import { addChinaParcel, addChinaBulk, getChinaParcels } from "../api/parcels";
 
 const { TextArea } = Input;
 
@@ -10,7 +10,26 @@ export default function ParcelsChina() {
   const [bulkText, setBulkText] = useState("");
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<any>(null);
+  const [parcels, setParcels] = useState<any[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [tableLoading, setTableLoading] = useState(false);
   const inputRef = useRef<any>(null);
+
+  const loadParcels = async (p = page) => {
+    setTableLoading(true);
+    try {
+      const { data } = await getChinaParcels({ page: p, per_page: 20 });
+      setParcels(data.items || []);
+      setTotal(data.total || 0);
+    } catch {
+      // ignore
+    } finally {
+      setTableLoading(false);
+    }
+  };
+
+  useEffect(() => { loadParcels(); }, [page]);
 
   const handleSingle = async () => {
     if (!singleTrack.trim()) return;
@@ -20,6 +39,8 @@ export default function ParcelsChina() {
       message.success(`Трек ${singleTrack.trim().toUpperCase()} добавлен`);
       setSingleTrack("");
       inputRef.current?.focus();
+      loadParcels(1);
+      setPage(1);
     } catch (e: any) {
       message.error(e.response?.data?.detail || "Ошибка");
     } finally {
@@ -36,6 +57,8 @@ export default function ParcelsChina() {
       setResult(data);
       message.success(`Добавлено: ${data.added} из ${data.total}`);
       setBulkText("");
+      loadParcels(1);
+      setPage(1);
     } catch (e: any) {
       message.error(e.response?.data?.detail || "Ошибка");
     } finally {
@@ -146,6 +169,51 @@ export default function ParcelsChina() {
               )}
             </div>
           )}
+        </Card>
+
+        <Card
+          title={
+            <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ fontWeight: 600 }}>Последние добавленные</span>
+              <Tag color="processing" style={{ borderRadius: 20, fontSize: 13 }}>
+                {total}
+              </Tag>
+            </span>
+          }
+          className="hover-card"
+          style={{ marginTop: 20 }}
+        >
+          <Table
+            dataSource={parcels}
+            rowKey="id"
+            size="small"
+            loading={tableLoading}
+            pagination={{
+              current: page,
+              pageSize: 20,
+              total,
+              onChange: (p) => setPage(p),
+              showSizeChanger: false,
+              showTotal: (t) => `Всего: ${t}`,
+            }}
+            columns={[
+              {
+                title: "Трек-код",
+                dataIndex: "track_id",
+                render: (v: string) => (
+                  <span style={{ fontFamily: "monospace", fontWeight: 500 }}>{v}</span>
+                ),
+              },
+              {
+                title: "Дата",
+                dataIndex: "created_at",
+                render: (v: string) => new Date(v).toLocaleString("ru-RU", {
+                  day: "2-digit", month: "2-digit", year: "numeric",
+                  hour: "2-digit", minute: "2-digit",
+                }),
+              },
+            ]}
+          />
         </Card>
       </div>
     </>

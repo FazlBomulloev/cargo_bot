@@ -1,7 +1,7 @@
 import api from "./client";
 
-export const getOverview = (period = "30d") =>
-  api.get("/stats/overview", { params: { period } });
+export const getOverview = (period = "30d", from_date?: string, to_date?: string) =>
+  api.get("/stats/overview", { params: { period, from_date, to_date } });
 
 export const getParcelsByDay = (from_date?: string, to_date?: string) =>
   api.get("/stats/parcels-by-day", { params: { from_date, to_date } });

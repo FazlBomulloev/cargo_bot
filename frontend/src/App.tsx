@@ -17,6 +17,7 @@ import Tariffs from "./pages/Tariffs";
 import Staff from "./pages/Staff";
 import Settings from "./pages/Settings";
 import AuditLog from "./pages/AuditLog";
+import Profile from "./pages/Profile";
 
 export default function App() {
   return (
@@ -30,6 +31,7 @@ export default function App() {
         }
       >
         <Route path="/" element={<Dashboard />} />
+        <Route path="/profile" element={<Profile />} />
         <Route path="/parcels-china" element={<ParcelsChina />} />
         <Route path="/parcels-dushanbe" element={<ParcelsDushanbe />} />
         <Route path="/parcels" element={<ParcelsList />} />

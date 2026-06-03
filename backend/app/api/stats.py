@@ -15,8 +15,10 @@ from app.api.deps import require_role
 router = APIRouter(prefix="/api/stats", tags=["stats"])
 
 
-def _period_start(period: str) -> datetime:
+def _period_start(period: str) -> datetime | None:
     now = datetime.now(timezone.utc)
+    if period == "all":
+        return None
     if period == "today":
         return now.replace(hour=0, minute=0, second=0, microsecond=0)
     if period == "7d":
@@ -31,35 +33,50 @@ def _period_start(period: str) -> datetime:
 @router.get("/overview")
 async def overview(
     period: str = Query("30d"),
+    from_date: str | None = None,
+    to_date: str | None = None,
     db: AsyncSession = Depends(get_db),
     current_user: StaffUser = Depends(require_role("owner")),
 ):
-    start = _period_start(period)
+    if period == "custom" and from_date:
+        start = datetime.fromisoformat(from_date)
+        end = datetime.fromisoformat(to_date) if to_date else datetime.now(timezone.utc)
+    else:
+        start = _period_start(period)
+        end = None
+
+    def _time_filter(col):
+        clauses = []
+        if start is not None:
+            clauses.append(col >= start)
+        if end is not None:
+            clauses.append(col <= end)
+        return clauses
 
     china_count = (await db.execute(
-        select(func.count(ParcelChina.id)).where(ParcelChina.created_at >= start)
+        select(func.count(ParcelChina.id)).where(*_time_filter(ParcelChina.created_at))
     )).scalar() or 0
 
     dushanbe_count = (await db.execute(
-        select(func.count(ParcelDushanbe.id)).where(ParcelDushanbe.created_at >= start)
+        select(func.count(ParcelDushanbe.id)).where(*_time_filter(ParcelDushanbe.created_at))
     )).scalar() or 0
 
     issued_count = (await db.execute(
         select(func.count(ParcelDushanbe.id)).where(
-            ParcelDushanbe.status == "issued", ParcelDushanbe.updated_at >= start
+            ParcelDushanbe.status == "issued", *_time_filter(ParcelDushanbe.updated_at)
         )
     )).scalar() or 0
 
     total_weight = (await db.execute(
-        select(func.sum(ParcelDushanbe.weight_kg)).where(ParcelDushanbe.created_at >= start)
+        select(func.sum(ParcelDushanbe.weight_kg)).where(*_time_filter(ParcelDushanbe.created_at))
     )).scalar() or 0
 
     revenue = (await db.execute(
-        select(func.sum(IssuanceOrder.total_amount)).where(IssuanceOrder.issued_at >= start)
+        select(func.sum(IssuanceOrder.total_amount)).where(*_time_filter(IssuanceOrder.issued_at))
     )).scalar() or 0
 
     new_clients = (await db.execute(
-        select(func.count(Client.id)).where(Client.created_at >= start)
+        select(func.count(Client.id)).where(*_time_filter(Client.created_at))
     )).scalar() or 0
 
     return {
@@ -187,7 +204,7 @@ async def stuck_parcels(
     result = (await db.execute(
         select(ParcelDushanbe)
         .where(
-            ParcelDushanbe.status.in_(["received_dushanbe", "ready_to_issue"]),
+            ParcelDushanbe.status == "received_dushanbe",
             ParcelDushanbe.created_at <= cutoff,
         )
         .order_by(ParcelDushanbe.created_at.asc())

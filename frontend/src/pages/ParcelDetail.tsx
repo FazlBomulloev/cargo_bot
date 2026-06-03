@@ -6,13 +6,11 @@ import { getParcel, updateParcelStatus } from "../api/parcels";
 
 const statusLabels: Record<string, string> = {
   received_dushanbe: "В Душанбе",
-  ready_to_issue: "Готова к выдаче",
-  issued: "Выдана",
+  issued: "Получена",
   problem: "Проблема",
 };
 const statusColors: Record<string, string> = {
   received_dushanbe: "processing",
-  ready_to_issue: "warning",
   issued: "success",
   problem: "error",
 };

@@ -101,11 +101,15 @@ export default function ClientDetail() {
                 render: (v: string) => {
                   const colors: Record<string, string> = {
                     received_dushanbe: "processing",
-                    ready_to_issue: "warning",
                     issued: "success",
                     problem: "error",
                   };
-                  return <Tag color={colors[v] || "default"} style={{ borderRadius: 20 }}>{v}</Tag>;
+                  const labels: Record<string, string> = {
+                    received_dushanbe: "В Душанбе",
+                    issued: "Получена",
+                    problem: "Проблема",
+                  };
+                  return <Tag color={colors[v] || "default"} style={{ borderRadius: 20 }}>{labels[v] || v}</Tag>;
                 },
               },
               { title: "Вес", dataIndex: "weight_kg", render: (v: number) => `${v} кг` },

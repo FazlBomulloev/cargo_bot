@@ -1,12 +1,37 @@
-import { useState } from "react";
-import { Card, Form, Input, InputNumber, Select, Button, message, Typography, Alert } from "antd";
+import { useEffect, useState } from "react";
+import { Card, Form, Input, InputNumber, Select, Button, message, Typography, Alert, Table, Tag } from "antd";
 import { InboxOutlined } from "@ant-design/icons";
-import { addDushanbeParcel } from "../api/parcels";
+import { addDushanbeParcel, getParcels } from "../api/parcels";
 
 export default function ParcelsDushanbe() {
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<any>(null);
+  const [parcels, setParcels] = useState<any[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [tableLoading, setTableLoading] = useState(false);
+
+  const loadParcels = async (p = page) => {
+    setTableLoading(true);
+    try {
+      const { data } = await getParcels({ page: p, per_page: 20 });
+      setParcels(data.items || []);
+      setTotal(data.total || 0);
+    } catch {
+      // ignore
+    } finally {
+      setTableLoading(false);
+    }
+  };
+
+  useEffect(() => { loadParcels(); }, [page]);
+
+  const statusMap: Record<string, { text: string; color: string }> = {
+    received_dushanbe: { text: "Принято", color: "blue" },
+    issued: { text: "Выдано", color: "default" },
+    problem: { text: "Проблема", color: "red" },
+  };
 
   const onFinish = async (values: any) => {
     setLoading(true);
@@ -19,6 +44,8 @@ export default function ParcelsDushanbe() {
         setResult({ type: "success", message: `Посылка добавлена. Клиент: ${data.client_name}` });
       }
       form.resetFields();
+      loadParcels(1);
+      setPage(1);
     } catch (e: any) {
       message.error(e.response?.data?.detail || "Ошибка");
     } finally {
@@ -91,6 +118,76 @@ export default function ParcelsDushanbe() {
               Добавить
             </Button>
           </Form>
+        </Card>
+        <Card
+          title={
+            <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ fontWeight: 600 }}>Последние добавленные</span>
+              <Tag color="processing" style={{ borderRadius: 20, fontSize: 13 }}>
+                {total}
+              </Tag>
+            </span>
+          }
+          className="hover-card"
+          style={{ marginTop: 20 }}
+        >
+          <Table
+            dataSource={parcels}
+            rowKey="id"
+            size="small"
+            loading={tableLoading}
+            pagination={{
+              current: page,
+              pageSize: 20,
+              total,
+              onChange: (p) => setPage(p),
+              showSizeChanger: false,
+              showTotal: (t) => `Всего: ${t}`,
+            }}
+            columns={[
+              {
+                title: "Трек-код",
+                dataIndex: "track_id",
+                render: (v: string) => (
+                  <span style={{ fontFamily: "monospace", fontWeight: 500 }}>{v}</span>
+                ),
+              },
+              {
+                title: "Вес",
+                dataIndex: "weight_kg",
+                render: (v: number) => `${v} кг`,
+                width: 100,
+              },
+              {
+                title: "Метод",
+                dataIndex: "delivery_method",
+                width: 100,
+                render: (v: string) => (
+                  <Tag color={v === "avia" ? "blue" : "orange"} style={{ borderRadius: 20 }}>
+                    {v === "avia" ? "Авиа" : "Фура"}
+                  </Tag>
+                ),
+              },
+              {
+                title: "Статус",
+                dataIndex: "status",
+                width: 120,
+                render: (v: string) => (
+                  <Tag color={statusMap[v]?.color || "default"} style={{ borderRadius: 20 }}>
+                    {statusMap[v]?.text || v}
+                  </Tag>
+                ),
+              },
+              {
+                title: "Дата",
+                dataIndex: "created_at",
+                render: (v: string) => new Date(v).toLocaleString("ru-RU", {
+                  day: "2-digit", month: "2-digit", year: "numeric",
+                  hour: "2-digit", minute: "2-digit",
+                }),
+              },
+            ]}
+          />
         </Card>
       </div>
     </>

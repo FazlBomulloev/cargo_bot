@@ -1,37 +1,39 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { Table, Select, Typography, Tag, Space, Card } from "antd";
-import { UnorderedListOutlined } from "@ant-design/icons";
-import { getParcels } from "../api/parcels";
+import { getAllParcels } from "../api/parcels";
 
 const statusColors: Record<string, string> = {
+  in_china: "cyan",
   received_dushanbe: "processing",
-  ready_to_issue: "warning",
   issued: "success",
   problem: "error",
 };
 const statusLabels: Record<string, string> = {
+  in_china: "В Китае",
   received_dushanbe: "В Душанбе",
-  ready_to_issue: "Готова",
-  issued: "Выдана",
-  problem: "Проблема",
+  issued: "Получена",
+  problem: "Проблемные",
 };
 
 export default function ParcelsList() {
   const [data, setData] = useState<any>({ items: [], total: 0 });
   const [page, setPage] = useState(1);
   const [status, setStatus] = useState<string | undefined>();
-  const [method, setMethod] = useState<string | undefined>();
   const [loading, setLoading] = useState(false);
 
   const load = async () => {
     setLoading(true);
-    const { data: d } = await getParcels({ page, per_page: 20, status, delivery_method: method });
-    setData(d);
+    try {
+      const { data: d } = await getAllParcels({ page, per_page: 20, status });
+      setData(d);
+    } catch {
+      setData({ items: [], total: 0 });
+    }
     setLoading(false);
   };
 
-  useEffect(() => { load(); }, [page, status, method]);
+  useEffect(() => { load(); }, [page, status]);
 
   return (
     <>
@@ -43,21 +45,10 @@ export default function ParcelsList() {
           <Select
             allowClear
             placeholder="Статус"
-            style={{ width: 160 }}
+            style={{ width: 180 }}
             value={status}
             onChange={(v) => { setStatus(v); setPage(1); }}
             options={Object.entries(statusLabels).map(([k, v]) => ({ value: k, label: v }))}
-          />
-          <Select
-            allowClear
-            placeholder="Метод"
-            style={{ width: 130 }}
-            value={method}
-            onChange={(v) => { setMethod(v); setPage(1); }}
-            options={[
-              { value: "avia", label: "Авиа" },
-              { value: "truck", label: "Фура" },
-            ]}
           />
         </Space>
       </div>
@@ -67,7 +58,7 @@ export default function ParcelsList() {
           <Table
             loading={loading}
             dataSource={data.items}
-            rowKey="id"
+            rowKey={(r) => `${r.status === "in_china" ? "c" : "d"}_${r.id}`}
             pagination={{
               current: page,
               total: data.total,
@@ -76,23 +67,37 @@ export default function ParcelsList() {
               showTotal: (total) => `Всего: ${total}`,
             }}
             columns={[
-              { title: "ID", dataIndex: "id", width: 60 },
               {
                 title: "Трек",
                 dataIndex: "track_id",
-                render: (v: string, r: any) => (
-                  <Link to={`/parcels/${r.id}`} style={{ fontWeight: 600, color: "#00A76F" }}>
-                    {v}
-                  </Link>
-                ),
+                render: (v: string, r: any) =>
+                  r.status !== "in_china" ? (
+                    <Link to={`/parcels/${r.id}`} style={{ fontFamily: "monospace", fontWeight: 600, color: "#00A76F" }}>
+                      {v}
+                    </Link>
+                  ) : (
+                    <span style={{ fontFamily: "monospace", fontWeight: 600 }}>{v}</span>
+                  ),
               },
-              { title: "Клиент ID", dataIndex: "client_id", width: 100 },
+              {
+                title: "Клиент",
+                dataIndex: "client_name",
+                render: (v: string, r: any) =>
+                  v ? (
+                    <span>
+                      <span style={{ fontWeight: 500 }}>{v}</span>
+                      <span style={{ color: "#919EAB", marginLeft: 8, fontSize: 12 }}>{r.tps_code}</span>
+                    </span>
+                  ) : (
+                    <span style={{ color: "#919EAB" }}>—</span>
+                  ),
+              },
               {
                 title: "Статус",
                 dataIndex: "status",
-                width: 130,
+                width: 140,
                 render: (v: string) => (
-                  <Tag color={statusColors[v]} style={{ borderRadius: 20, padding: "2px 12px" }}>
+                  <Tag color={statusColors[v] || "default"} style={{ borderRadius: 20, padding: "2px 12px" }}>
                     {statusLabels[v] || v}
                   </Tag>
                 ),
@@ -101,23 +106,33 @@ export default function ParcelsList() {
                 title: "Вес",
                 dataIndex: "weight_kg",
                 width: 90,
-                render: (v: number) => <span style={{ fontWeight: 500 }}>{v} кг</span>,
+                render: (v: number | null) =>
+                  v != null ? <span style={{ fontWeight: 500 }}>{v} кг</span> : <span style={{ color: "#919EAB" }}>—</span>,
               },
               {
                 title: "Метод",
                 dataIndex: "delivery_method",
                 width: 90,
-                render: (v: string) => (
-                  <Tag color={v === "avia" ? "blue" : "orange"} style={{ borderRadius: 20 }}>
-                    {v === "avia" ? "Авиа" : "Фура"}
-                  </Tag>
-                ),
+                render: (v: string | null) =>
+                  v ? (
+                    <Tag color={v === "avia" ? "blue" : "orange"} style={{ borderRadius: 20 }}>
+                      {v === "avia" ? "Авиа" : "Фура"}
+                    </Tag>
+                  ) : (
+                    <span style={{ color: "#919EAB" }}>—</span>
+                  ),
               },
               {
                 title: "Дата",
                 dataIndex: "created_at",
-                width: 110,
-                render: (v: string) => v?.slice(0, 10),
+                width: 160,
+                render: (v: string) =>
+                  v
+                    ? new Date(v).toLocaleString("ru-RU", {
+                        day: "2-digit", month: "2-digit", year: "numeric",
+                        hour: "2-digit", minute: "2-digit",
+                      })
+                    : "—",
               },
             ]}
           />

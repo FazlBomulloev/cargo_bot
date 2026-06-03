@@ -1,10 +1,12 @@
+import json
+
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.models.staff import StaffUser
-from app.schemas.staff import ResetPasswordRequest, StaffCreate, StaffResponse, StaffUpdate
+from app.schemas.staff import PermissionsUpdate, ResetPasswordRequest, StaffCreate, StaffResponse, StaffUpdate
 from app.services.audit_service import log_action
 from app.utils.security import hash_password
 from app.api.deps import get_client_ip, require_role
@@ -14,16 +16,16 @@ router = APIRouter(prefix="/api/staff", tags=["staff"])
 owner_only = require_role("owner")
 
 
-@router.get("", response_model=list[StaffResponse])
+@router.get("")
 async def list_staff(
     db: AsyncSession = Depends(get_db),
     current_user: StaffUser = Depends(owner_only),
 ):
     result = await db.execute(select(StaffUser).order_by(StaffUser.id))
-    return result.scalars().all()
+    return [StaffResponse.from_staff(s) for s in result.scalars().all()]
 
 
-@router.post("", response_model=StaffResponse, status_code=status.HTTP_201_CREATED)
+@router.post("", status_code=status.HTTP_201_CREATED)
 async def create_staff(
     body: StaffCreate,
     request: Request,
@@ -35,12 +37,18 @@ async def create_staff(
     existing = await db.execute(select(StaffUser).where(StaffUser.login == body.login))
     if existing.scalar_one_or_none():
         raise HTTPException(status_code=409, detail="Login already exists")
+    default_perms = {
+        "admin_china": ["parcels_china", "parcels_list"],
+        "admin_dushanbe": ["parcels_dushanbe", "parcels_list", "issuance", "issuance_history", "clients", "unresolved"],
+        "owner": [],
+    }
     staff = StaffUser(
         full_name=body.full_name,
         login=body.login,
         password_hash=hash_password(body.password),
         role=body.role,
         warehouse_id=body.warehouse_id,
+        permissions=json.dumps(default_perms.get(body.role, [])),
     )
     db.add(staff)
     await db.flush()
@@ -55,7 +63,7 @@ async def create_staff(
     )
     await db.commit()
     await db.refresh(staff)
-    return staff
+    return StaffResponse.from_staff(staff)
 
 
 @router.patch("/{staff_id}", response_model=StaffResponse)
@@ -143,3 +151,41 @@ async def reset_password(
     )
     await db.commit()
     return {"detail": "Password reset successfully"}
+
+
+VALID_PERMISSIONS = [
+    "dashboard", "parcels_china", "parcels_dushanbe", "parcels_list",
+    "issuance", "issuance_history", "clients", "unresolved",
+    "warehouses", "tariffs", "staff", "settings", "audit",
+]
+
+
+@router.patch("/{staff_id}/permissions")
+async def update_permissions(
+    staff_id: int,
+    body: PermissionsUpdate,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: StaffUser = Depends(owner_only),
+):
+    staff = await db.get(StaffUser, staff_id)
+    if not staff:
+        raise HTTPException(status_code=404, detail="Staff not found")
+    if staff.role == "owner":
+        raise HTTPException(status_code=400, detail="Cannot change owner permissions")
+    filtered = [p for p in body.permissions if p in VALID_PERMISSIONS]
+    before_perms = staff.permissions or "[]"
+    staff.permissions = json.dumps(filtered)
+    await log_action(
+        db,
+        staff_id=current_user.id,
+        action="update_permissions",
+        entity_type="staff",
+        entity_id=staff.id,
+        before={"permissions": before_perms},
+        after={"permissions": filtered},
+        ip_address=get_client_ip(request),
+    )
+    await db.commit()
+    await db.refresh(staff)
+    return StaffResponse.from_staff(staff)
