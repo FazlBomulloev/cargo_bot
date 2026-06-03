@@ -31,6 +31,8 @@ services:
       OWNER_LOGIN: "${OWNER_LOGIN}"
       OWNER_PASSWORD: "${OWNER_PASSWORD}"
       OWNER_FULL_NAME: "${OWNER_FULL_NAME}"
+    volumes:
+      - api_data:/app/data
     depends_on:
       postgres:
         condition: service_healthy
@@ -58,3 +60,4 @@ services:
 
 volumes:
   pgdata:
+  api_data:
