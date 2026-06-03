@@ -175,6 +175,36 @@ async def list_all_parcels(
     db: AsyncSession = Depends(get_db),
     current_user: StaffUser = Depends(require_role("admin_china", "admin_dushanbe", "owner")),
 ):
+    async def _unresolved_items(db: AsyncSession, query=None):
+        if query is None:
+            query = select(UnresolvedParcel).where(UnresolvedParcel.resolved == False)
+        result = await db.execute(query.order_by(UnresolvedParcel.created_at.desc()))
+        items = []
+        for p in result.scalars().all():
+            items.append({
+                "id": p.id, "track_id": p.track_id, "status": "unresolved",
+                "weight_kg": float(p.weight_kg) if p.weight_kg else None,
+                "delivery_method": p.delivery_method,
+                "client_name": None, "tps_code": p.raw_tps_code,
+                "created_at": p.created_at.isoformat() if p.created_at else None,
+            })
+        return items
+
+    async def _dushanbe_items(db: AsyncSession, query):
+        result = await db.execute(query.order_by(ParcelDushanbe.created_at.desc()))
+        items = []
+        for p in result.scalars().all():
+            c = await db.get(Client, p.client_id) if p.client_id else None
+            items.append({
+                "id": p.id, "track_id": p.track_id, "status": p.status,
+                "weight_kg": float(p.weight_kg) if p.weight_kg else None,
+                "delivery_method": p.delivery_method,
+                "client_name": c.full_name if c else None,
+                "tps_code": c.tps_code if c else None,
+                "created_at": p.created_at.isoformat() if p.created_at else None,
+            })
+        return items
+
     if status_filter == "in_china":
         query = select(ParcelChina)
         total = (await db.execute(select(func.count()).select_from(query.subquery()))).scalar() or 0
@@ -193,26 +223,41 @@ async def list_all_parcels(
             })
         return {"items": items, "total": total, "page": page, "pages": pages}
 
-    query = select(ParcelDushanbe)
+    if status_filter == "unresolved":
+        all_items = await _unresolved_items(db)
+        total = len(all_items)
+        pages = max(1, math.ceil(total / per_page))
+        start = (page - 1) * per_page
+        return {"items": all_items[start:start + per_page], "total": total, "page": page, "pages": pages}
+
     if status_filter:
-        query = query.where(ParcelDushanbe.status == status_filter)
-    total = (await db.execute(select(func.count()).select_from(query.subquery()))).scalar() or 0
-    pages = max(1, math.ceil(total / per_page))
-    result = await db.execute(
-        query.order_by(ParcelDushanbe.created_at.desc())
-        .offset((page - 1) * per_page).limit(per_page)
+        query = select(ParcelDushanbe).where(ParcelDushanbe.status == status_filter)
+        all_items = await _dushanbe_items(db, query)
+        total = len(all_items)
+        pages = max(1, math.ceil(total / per_page))
+        start = (page - 1) * per_page
+        return {"items": all_items[start:start + per_page], "total": total, "page": page, "pages": pages}
+
+    # No filter — combine China + Dushanbe + Unresolved
+    china_result = await db.execute(
+        select(ParcelChina).order_by(ParcelChina.created_at.desc())
     )
-    items = []
-    for p in result.scalars().all():
-        c = await db.get(Client, p.client_id) if p.client_id else None
-        items.append({
-            "id": p.id, "track_id": p.track_id, "status": p.status,
-            "weight_kg": float(p.weight_kg) if p.weight_kg else None,
-            "delivery_method": p.delivery_method,
-            "client_name": c.full_name if c else None,
-            "tps_code": c.tps_code if c else None,
+    all_items = []
+    for p in china_result.scalars().all():
+        all_items.append({
+            "id": p.id, "track_id": p.track_id, "status": "in_china",
+            "weight_kg": None, "delivery_method": None,
+            "client_name": None, "tps_code": None,
             "created_at": p.created_at.isoformat() if p.created_at else None,
         })
+    all_items.extend(await _dushanbe_items(db, select(ParcelDushanbe)))
+    all_items.extend(await _unresolved_items(db))
+
+    all_items.sort(key=lambda x: x["created_at"] or "", reverse=True)
+    total = len(all_items)
+    pages = max(1, math.ceil(total / per_page))
+    start = (page - 1) * per_page
+    items = all_items[start:start + per_page]
     return {"items": items, "total": total, "page": page, "pages": pages}
 
 

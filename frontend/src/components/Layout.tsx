@@ -208,6 +208,7 @@ export default function Layout() {
         >
           <Avatar
             size={36}
+            src={user?.avatar_url || undefined}
             style={{
               background: (user?.role ? roleColors[user.role] : undefined) || "#00A76F",
               flexShrink: 0,
@@ -215,7 +216,7 @@ export default function Layout() {
               fontWeight: 600,
             }}
           >
-            {user?.full_name?.charAt(0)?.toUpperCase() || "U"}
+            {!user?.avatar_url && (user?.full_name?.charAt(0)?.toUpperCase() || "U")}
           </Avatar>
           {!collapsed && (
             <div style={{ overflow: "hidden", minWidth: 0 }}>
@@ -319,12 +320,13 @@ export default function Layout() {
               >
                 <Avatar
                   size={36}
+                  src={user?.avatar_url || undefined}
                   style={{
                     background: (user?.role ? roleColors[user.role] : undefined) || "#00A76F",
                     fontWeight: 600,
                   }}
                 >
-                  {user?.full_name?.charAt(0)?.toUpperCase() || "U"}
+                  {!user?.avatar_url && (user?.full_name?.charAt(0)?.toUpperCase() || "U")}
                 </Avatar>
                 <div style={{ lineHeight: 1.3, textAlign: "right" }}>
                   <div

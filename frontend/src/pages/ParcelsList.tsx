@@ -8,12 +8,14 @@ const statusColors: Record<string, string> = {
   received_dushanbe: "processing",
   issued: "success",
   problem: "error",
+  unresolved: "warning",
 };
 const statusLabels: Record<string, string> = {
   in_china: "В Китае",
   received_dushanbe: "В Душанбе",
   issued: "Получена",
-  problem: "Проблемные",
+  problem: "Проблема",
+  unresolved: "Неопознанные",
 };
 
 export default function ParcelsList() {
