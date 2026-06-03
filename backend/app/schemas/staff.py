@@ -34,10 +34,11 @@ class StaffResponse(BaseModel):
     @classmethod
     def from_staff(cls, staff):
         import json
+        raw = getattr(staff, "permissions", None) or ""
         perms = []
-        if staff.permissions:
+        if raw:
             try:
-                perms = json.loads(staff.permissions)
+                perms = json.loads(raw)
             except (json.JSONDecodeError, TypeError):
                 perms = []
         return cls(
@@ -45,7 +46,7 @@ class StaffResponse(BaseModel):
             full_name=staff.full_name,
             login=staff.login,
             role=staff.role,
-            avatar_url=staff.avatar_url,
+            avatar_url=getattr(staff, "avatar_url", None),
             permissions=perms,
             warehouse_id=staff.warehouse_id,
             is_active=staff.is_active,

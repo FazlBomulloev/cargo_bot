@@ -56,12 +56,30 @@ app.include_router(notifications_router)
 @app.on_event("startup")
 async def on_startup():
     Path("data").mkdir(exist_ok=True)
+    Path("data/avatars").mkdir(exist_ok=True)
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+    await _migrate_staff_columns()
     await _seed_owner()
     await _seed_warehouses()
     await _seed_tariffs()
     log.info("Cargo TPS API started")
+
+
+async def _migrate_staff_columns():
+    from sqlalchemy import text, inspect as sa_inspect
+    async with engine.begin() as conn:
+        def _check_and_add(connection):
+            inspector = sa_inspect(connection)
+            columns = [c["name"] for c in inspector.get_columns("staff_users")]
+            stmts = []
+            if "avatar_url" not in columns:
+                stmts.append("ALTER TABLE staff_users ADD COLUMN avatar_url VARCHAR(500)")
+            if "permissions" not in columns:
+                stmts.append("ALTER TABLE staff_users ADD COLUMN permissions TEXT")
+            for stmt in stmts:
+                connection.execute(text(stmt))
+        await conn.run_sync(_check_and_add)
 
 
 async def _seed_owner():
